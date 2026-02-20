@@ -1,0 +1,352 @@
+import random
+import numpy as np
+import pandas as pd
+import networkx as nx
+from networkx.algorithms.community import louvain_communities
+from infomap import Infomap
+import graph_tool.all as gt
+import shap
+import os
+import joblib
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+CURRENT_FILE_PATH = os.path.abspath(__file__)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
+
+#################################################
+# FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
+#################################################
+
+def validate_input_graph(G, min_nodes=2, min_edges=1, require_undirected=True):
+    """
+    Vérifie la validité du graphe d'entrée avant les calculs de prédiction de liens.
+    """
+    # 1. Vérification du type de base
+    if not isinstance(G, nx.Graph):
+        raise TypeError(
+            f"L'entrée doit être un objet networkx.Graph. Reçu: {type(G)}. "
+            "Pour d'autres formats, convertissez-les d'abord avec networkx."
+        )
+
+    if require_undirected and G.is_directed():
+        raise ValueError(
+            "Le graphe est dirigé (DiGraph). L'algorithme actuel supporte uniquement "
+            "les graphes non-dirigés pour garantir la validité des métriques topo."
+        )
+
+    # 3. Vérification de la taille
+    n_nodes = G.number_of_nodes()
+    n_edges = G.number_of_edges()
+
+    if n_nodes < min_nodes:
+        raise ValueError(f"Graphe trop petit: {n_nodes} nœuds (minimum requis: {min_nodes}).")
+
+    if n_edges < min_edges:
+        raise ValueError(f"Le graphe n'a pas assez de liens ({n_edges}) pour l'entraînement.")
+
+    # 4. Vérification optionnelle : Self-loops (peuvent fausser SP et CN)
+    n_self_loops = nx.number_of_selfloops(G)
+    if n_self_loops > 0:
+        print(f"Warning: {n_self_loops} boucles sur soi (self-loops) détectées. "
+              "Il est recommandé de les supprimer avec G.remove_edges_from(nx.selfloop_edges(G)).")
+
+    return True
+
+
+########################################
+# FONCTIONS DE CALCUL DES FEATURES #####
+########################################
+def _get_topology_features(G, u, v, precomputed, is_existing_edge=False):
+    """Calcule les métriques topologiques pour une paire (u, v)"""
+    
+    # 1. Métriques de paires (Voisinage)
+    aa = next(nx.adamic_adar_index(G, [(u, v)]))[2]
+    jc = next(nx.jaccard_coefficient(G, [(u, v)]))[2]
+    pa = next(nx.preferential_attachment(G, [(u, v)]))[2]
+    cn = len(list(nx.common_neighbors(G, u, v)))
+
+    try:
+        sp = nx.shortest_path_length(G, source=u, target=v)
+    except nx.NetworkXNoPath:
+        sp = 0 
+
+    # 2. Métriques de Nœuds (extraites du dictionnaire pré-calculé)
+    # On ajoute les versions pour u et pour v
+    node_features = {
+        'pr_u': precomputed['pr'].get(u, 0), 'pr_v': precomputed['pr'].get(v, 0),
+        'lcc_u': precomputed['lcc'].get(u, 0), 'lcc_v': precomputed['lcc'].get(v, 0),
+        'and_u': precomputed['and'].get(u, 0), 'and_v': precomputed['and'].get(v, 0),
+        'dc_u': precomputed['dc'].get(u, 0), 'dc_v': precomputed['dc'].get(v, 0)
+    }
+
+    # Fusion de toutes les métriques
+    topo_res = {'cn': cn, 'aa': aa, 'jc': jc, 'pa': pa, 
+                'sp': sp
+               }
+    topo_res.update(node_features)
+    
+    return topo_res
+
+
+def prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=1.0):
+    all_edges = list(G.edges())
+    nodes = list(G.nodes())
+    n_pos = len(all_edges)
+    data = []
+    random.seed(42)
+
+    # 1. Extraction des arêtes pour le split
+    random.shuffle(all_edges)
+    
+    split_idx = int(len(all_edges) * (1 - test_size))
+    train_edges = all_edges[:split_idx]
+    test_edges = all_edges[split_idx:]
+    
+    # 2. Création du graphe d'entraînement (G sans le test set)
+    # C'est sur ce graphe qu'on va tout calculer
+    G_train = nx.Graph()
+    G_train.add_nodes_from(G.nodes())
+    G_train.add_edges_from(train_edges)
+    
+    print(f"Graphe original: {G.number_of_edges()} liens")
+    print(f"Graphe d'entraînement: {G_train.number_of_edges()} liens")
+    print(f"Liens cachés pour le test: {len(test_edges)}")
+    
+
+    # --- ÉTAPE DE PRÉ-CALCUL ---
+    # On calcule les métriques de noeuds une seule fois ici
+    print("Pré-calcul des métriques de nœuds...")
+    precomputed = {
+        'pr': nx.pagerank(G_train),                    # PageRank (PR)
+        'lcc': nx.clustering(G_train),                # Local Clustering Coefficient (LCC)
+        'and': nx.average_neighbor_degree(G_train),   # Average Neighbor Degree (AND)
+        'dc': nx.degree_centrality(G_train)           # Degree Centrality (DC)
+    }
+    
+    # --- 1. CLASSE POSITIVE ---
+    for u, v in all_edges:
+        topo = _get_topology_features(G_train, u, v, precomputed, is_existing_edge=True)
+        
+        row = {
+            'u': u, 
+            'v': v,
+            'target': 1
+        }
+        row.update(topo)
+        data.append(row)
+    
+    # --- 2. CLASSE NÉGATIVE ---
+    n_neg_target = int(n_pos * negative_ratio)
+    neg_count = 0
+    while neg_count < n_neg_target:
+        u, v = random.sample(nodes, 2)
+        if not G.has_edge(u, v) and u != v:
+            topo = _get_topology_features(G_train, u, v, precomputed, is_existing_edge=False)
+            
+            row = {
+                'u': u, 
+                'v': v,
+                'target': 0
+            }
+            row.update(topo)
+            data.append(row)
+            neg_count += 1
+
+    print(f"DataFrame créé <3 : {len(data)} paires de noeuds choisies")
+    return pd.DataFrame(data), G_train
+
+### Fonction parente qui appelle les différentes fonctions de calcul de features de communauté
+def computeCommunityFeatures(G, dataFrame, features = "All"):
+    print("\n")
+    print("--- Calcul des métriques de communauté ---")
+    print("Calcul des communautés de louvain...")
+    dataFrame = _appendLouvainCommunities(G, dataFrame=dataFrame)
+    print("Calcul des communautés via Infomap...")
+    dataFrame = _appendInfomapCommunities(G, dataFrame=dataFrame)
+    print("Calcul des communautés via SBM...")
+    dataFrame = _appendGraphToolSBM(G, dataFrame=dataFrame)
+
+    return dataFrame
+
+def _appendLouvainCommunities(G, dataFrame):
+    communities = nx.community.louvain_communities(G, seed=42)
+
+    node_to_community = {} 
+    for i, community in enumerate(communities):
+        for node in community:
+            node_to_community[node] = i
+            
+    louvain_communities_data = dataFrame.copy()
+
+    louvain_communities_data["community_u"] = louvain_communities_data["u"].map(node_to_community)
+    louvain_communities_data["community_v"] = louvain_communities_data["v"].map(node_to_community)
+    louvain_communities_data["same_community"] = (louvain_communities_data["community_u"] == louvain_communities_data["community_v"]).astype(int)
+    
+    return louvain_communities_data
+
+def _appendInfomapCommunities(G, dataFrame):
+
+    im = Infomap("--two-level --silent")
+    
+    for source, target in G.edges():
+        im.add_link(int(source), int(target))
+    
+    im.run()
+
+    node_to_infomap = {node.node_id: node.module_id for node in im.tree if node.is_leaf}
+
+    infomap_data = dataFrame.copy()
+
+    infomap_data["u"] = pd.to_numeric(infomap_data["u"], errors='coerce').astype(int)
+    infomap_data["v"] = pd.to_numeric(infomap_data["v"], errors='coerce').astype(int)
+
+    infomap_data["infomap_u"] = infomap_data["u"].map(node_to_infomap)
+    infomap_data["infomap_v"] = infomap_data["v"].map(node_to_infomap)
+    infomap_data["same_infomap"] = (infomap_data["infomap_u"] == infomap_data["infomap_v"]).astype(int)
+
+    return infomap_data
+
+def _appendGraphToolSBM(G_nx, dataFrame):
+    """
+    Inférence SBM via graph-tool avec détection automatique 
+    du nombre de blocs (MDL).
+    """
+    nodes_list = list(G_nx.nodes())
+    node_index = {node: i for i, node in enumerate(nodes_list)}
+    
+    G_gt = gt.Graph(directed=False)
+    G_gt.add_vertex(len(nodes_list))
+    
+    edges = [(node_index[u], node_index[v]) for u, v in G_nx.edges()]
+    G_gt.add_edge_list(edges)
+
+    state = gt.minimize_blockmodel_dl(G_gt)
+
+    blocks = state.get_blocks()
+    
+    node_to_community = {nodes_list[i]: int(blocks[i]) for i in range(len(nodes_list))}
+            
+    sbm_data = dataFrame.copy()
+    sbm_data["community_u"] = sbm_data["u"].map(node_to_community)
+    sbm_data["community_v"] = sbm_data["v"].map(node_to_community)
+    sbm_data["same_community"] = (sbm_data["community_u"] == sbm_data["community_v"]).astype(int)
+    
+    return sbm_data
+
+
+########################################
+# FONCTIONS D'APPEL DE SHAP ############
+########################################
+def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
+    """Calcule les SHAP values et génère les plots globaux proprement."""
+    # 1. Configuration de l'explainer 'Boîte Noire' (le plus stable sur mon Mac)
+    # On définit la fonction de prédiction (proba de la classe 1)
+    model_predict = lambda x: model.predict_proba(x)[:, 1]
+    
+    # Utilisation d'un masker (échantillon de référence)
+    # On prend 50 lignes pour équilibrer vitesse et précision
+    masker = X_test.iloc[:50]
+    
+    # Initialisation de l'explainer
+    explainer = shap.Explainer(model_predict, masker)    
+    
+    # 2. Calcul effectif des SHAP values
+    # On récupère l'objet 'Explanation' complet
+    shap_explanation = explainer(X_test)
+    
+    # 3. Extraction des valeurs numériques pour le retour de fonction
+    # On récupère les valeurs brutes (.values)
+    shap_values = shap_explanation.values
+
+    # Gestion de la dimension (si SHAP renvoie [n_samples, n_features, 2])
+    if len(shap_values.shape) == 3:
+        shap_values = shap_values[:, :, 1]
+    
+    # --- GÉNÉRATION DES PLOTS ---
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Plot 1: Summary Points (Beeswarm)
+    plt.figure(figsize=(12, 8))
+    # On peut passer l'objet explanation directement, c'est plus moderne
+    shap.plots.beeswarm(shap_explanation, show=False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_summary_points.png"))
+    plt.close()
+
+    # Plot 2: Summary Bar
+    plt.figure(figsize=(12, 8))
+    shap.plots.bar(shap_explanation, show=False)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_summary_bar.png"))
+    plt.close()
+    
+    return shap_explanation
+
+
+def save_shap_analysis(shap_exp, feature_names=None, filename="shap_explainer.joblib"):
+    """
+    Sauvegarde avec un chemin absolu construit dynamiquement.
+    """
+    # Construction du chemin absolu vers le dossier outputs
+    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    output_path = os.path.join(output_dir, filename)
+    
+    # Création du dossier (absolu)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if feature_names is not None:
+        shap_exp.feature_names = feature_names
+    
+    # Sauvegarde
+    joblib.dump(shap_exp, output_path)
+    print(f"Shap_explainer sauvegardé : {output_path}")
+
+    return output_path
+    
+def load_shap_analysis(filename="shap_explainer.joblib"):
+    """
+    Charge l'objet SHAP complet depuis le dossier des résultats.
+    """
+    root = Path(PROJECT_ROOT)
+    input_path = root / "outputs" / "results" / filename    
+    
+    if not input_path.exists():
+        raise FileNotFoundError(f"Impossible de trouver le fichier : {input_path}")
+    
+    # Chargement
+    shap_exp = joblib.load(input_path)
+    
+    print(f" Analyse SHAP chargée avec succès depuis : {input_path}")
+    print(f" Nombre d'échantillons : {shap_exp.values.shape[0]}")
+    print(f" Nombre de features : {shap_exp.values.shape[1]}")
+    
+    return shap_exp
+
+
+def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
+    """Calcule la distribution des rangs et génère le barplot du Top 5."""
+    abs_shap = np.abs(shap_values)
+    ranks = np.argsort(-abs_shap, axis=1)
+    
+    ranking_stats = {}
+    n_samples, n_features = shap_values.shape
+
+    for i, name in enumerate(feature_names):
+        feature_ranks = np.where(ranks == i)[1] + 1
+        counts = np.bincount(feature_ranks, minlength=n_features + 1)[1:]
+        ranking_stats[name] = (counts / n_samples) * 100
+
+    df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
+    
+    # Plot 3: Top 5 Appearance
+    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
+    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
+    plt.close()
+    
+    return df_ranks
