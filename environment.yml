@@ -1,0 +1,15 @@
+name: stageM2
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - matplotlib
+  - numpy
+  - pyvis
+  - pandas
+  - ipykernel
+  - shap
+  - llvmlite
+  - infomap
+  - graph-tool
+prefix: /Users/bgdu69/miniconda3/envs/stageM2

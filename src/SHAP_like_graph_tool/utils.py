@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from networkx.algorithms.community import louvain_communities
+from sklearn.metrics.pairwise import cosine_similarity
+from node2vec import Node2Vec
 from infomap import Infomap
 import graph_tool.all as gt
 import shap
@@ -234,6 +236,73 @@ def _appendGraphToolSBM(G_nx, dataFrame):
     
     return sbm_data
 
+### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
+def computeDistanceFeatures(G, dataFrame, features = "All"):
+    print("\n")
+    print("--- Calcul des métriques de distance ---")
+    print("Calcul de Node2Vec homophilie p=2, q=0.5 ...")
+    dataFrame = _append_node2vec_features(G, dataFrame=dataFrame, p=2, q=0.5)
+    print("Calcul de DeepWalk p=1, q=1 ...")
+    dataFrame = _append_node2vec_features(G, dataFrame=dataFrame, p=1, q=1)
+
+    return dataFrame
+
+def _append_node2vec_features(G, dataFrame, p,q, dimensions=64):
+    """
+    Génère les embeddings Node2Vec et retourne un dictionnaire {node_id: vector}
+    """
+    print(f"Génération des marches aléatoires (dim={dimensions})...")
+    
+    # Configuration de Node2Vec
+    # p=1, q=1 -> équivalent à DeepWalk
+    # p=1, q=2 -> Favorise l'exploration locale (structure)
+    # p=2, q=0.5 -> Favorise l'exploration lointaine (communautés) - homophilie
+    node2vec = Node2Vec(G, 
+                        dimensions=dimensions, 
+                        walk_length=30, 
+                        num_walks=100, 
+                        workers=4, 
+                        p=p, q=q)
+
+    print("Entraînement du modèle Skip-gram...")
+    model = node2vec.fit(window=10, min_count=1, batch_words=4)
+    
+    # On récupère les vecteurs dans un dictionnaire
+    embeddings = {str(node): model.wv[str(node)] for node in G.nodes()}
+
+    def _get_cosine_sim(u, v):
+        key_u = str(int(float(u))) 
+        key_v = str(int(float(v)))
+        vec_u = embeddings[key_u].reshape(1, -1)
+        vec_v = embeddings[key_v].reshape(1, -1)
+        return cosine_similarity(vec_u, vec_v)[0][0]
+
+    def _get_l2_dist(u, v):
+        key_u = str(int(float(u))) 
+        key_v = str(int(float(v)))
+        vec_u = embeddings[key_u]
+        vec_v = embeddings[key_v]
+        return np.linalg.norm(vec_u - vec_v)
+
+    print("Calcul des distances vectorielles pour chaque paire...")
+
+    dataFrame[f'n2v_p{p}_q{q}_cosine'] = dataFrame.apply(lambda row: _get_cosine_sim(row['u'], row['v']), axis=1)
+    dataFrame[f'n2v_p{p}_q{q}_dist'] = dataFrame.apply(lambda row: _get_l2_dist(row['u'], row['v']), axis=1)
+    
+    return dataFrame
+
+def save_dataset(dataset, filename="dataset"):
+    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    output_path = os.path.join(output_dir, filename)
+    
+    # Création du dossier (absolu)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    dataset.to_parquet(output_path, index=False)
+    print(f"Dataset (DataFrame) sauvegardé : {output_path}")
+
+    return output_path
+
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
@@ -263,6 +332,7 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     if len(shap_values.shape) == 3:
         shap_values = shap_values[:, :, 1]
     
+    """
     # --- GÉNÉRATION DES PLOTS ---
     os.makedirs(output_dir, exist_ok=True)
 
@@ -280,6 +350,7 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, "shap_summary_bar.png"))
     plt.close()
+    """
     
     return shap_explanation
 
