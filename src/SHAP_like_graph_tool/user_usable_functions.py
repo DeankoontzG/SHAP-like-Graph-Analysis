@@ -1,5 +1,7 @@
 from .utils import *
 from .models import *
+import matplotlib.pyplot as plt
+import numpy as np
 
 def execute(G, G_name) : 
     validate_input_graph(G)
@@ -45,7 +47,7 @@ def evaluate(G_name, display=False):
 
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Attributs": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
+        "Groupe_Communities": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
         "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
     }
 
@@ -135,3 +137,99 @@ def evaluate(G_name, display=False):
             print(f"{cat_name:<25} | {mean_contradiction_ratios[i]:.4f}")
             
     return results_to_save
+
+def plot_shap_evolution():
+
+    ratios = [round(r, 2) for r in np.linspace(0, 1, 21)]
+    valid_ratios = []
+
+    all_results = {
+        "base": {"Groupe_Structure": [], "Groupe_Communities": [], "Groupe_Embeddings": []},
+        "abs": {"Groupe_Structure": [], "Groupe_Communities": [], "Groupe_Embeddings": []},
+        "custom": {"Groupe_Structure": [], "Groupe_Communities": [], "Groupe_Embeddings": []}
+    }
+
+    for r in ratios:
+        G_name = f"artificial_graph_sbm_{r:.2f}_pos_{1-r:.2f}".replace('.', '_')
+        filename = f"shap_analysis_{G_name}.joblib"
+        try:
+            data = loadsave_data_joblib(data=None, filename=filename, mode="load")
+            
+            shaps = {
+                "base": data["shap_explanation_grouped"],
+                "abs": data["shap_explanation_abs"],
+                "custom": data["exp_groups_custom"] 
+            }
+
+            for k, exp in shaps.items():
+                importances = np.mean(np.abs(exp.values) if k != "abs" else exp.values, axis=0)
+                for idx, cat_name in enumerate(exp.feature_names):
+                    if cat_name in all_results[k]:
+                        all_results[k][cat_name].append(importances[idx])
+                    else : 
+                        print(f"Catégorie {cat_name} non connue :(")
+            
+            valid_ratios.append(r)
+            
+        except FileNotFoundError:
+            print("Fichier non trouvé")
+            continue
+
+    # --- GÉNÉRATION DES GRAPHIQUES (3 Subplots) ---
+    fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharex=True)
+    
+    # Titre général
+    fig.suptitle("Évolution de l'importance SHAP selon le ratio SBM", fontsize=16, y=1.02)
+    
+    titles = {
+        "base": "SHAP Normal (Signed Sum)", 
+        "abs": "SHAP Absolute (Sum of Abs)", 
+        "custom": "SHAP Custom Analysis"
+    }
+    
+    # Couleurs et marqueurs mis à jour avec la bonne clé
+    colors = {
+        'Groupe_Structure': '#1f77b4', 
+        'Groupe_Communities': '#ff7f0e', 
+        'Groupe_Embeddings': '#2ca02c'
+    }
+    
+    markers = {
+        'Groupe_Structure': 'o', 
+        'Groupe_Communities': 's', 
+        'Groupe_Embeddings': '^'
+    }
+
+    for i, (metrique, ax) in enumerate(zip(["base", "abs", "custom"], axes)):
+        # On trace chaque catégorie de features
+        for cat_name, values in all_results[metrique].items():
+            if len(values) == len(valid_ratios): # Sécurité pour les données manquantes
+                ax.plot(
+                    valid_ratios, 
+                    values, 
+                    label=cat_name, 
+                    color=colors.get(cat_name, 'gray'), 
+                    marker=markers.get(cat_name, 'x'), 
+                    linewidth=2,
+                    markersize=6
+                )
+        
+        # Style de chaque subplot
+        ax.set_title(titles[metrique], fontsize=13, fontweight='bold', pad=10)
+        ax.set_xlabel("Ratio SBM", fontsize=11)
+        ax.grid(True, linestyle='--', alpha=0.6)
+        
+        if i == 0:
+            ax.set_ylabel("Importance Moyenne (SHAP)", fontsize=12)
+        
+        ax.legend(fontsize=9, loc='best')
+
+    # Ajustement automatique de l'espacement
+    plt.tight_layout()
+    
+    # Sauvegarde
+    save_path = "outputs/plots/detailed_shap_evolution.png"
+    plt.savefig(save_path, bbox_inches='tight', dpi=300)
+    print(f"\nGraphique sauvegardé avec succès dans : {save_path}")
+    
+    plt.show()
