@@ -2,6 +2,8 @@ import random
 import numpy as np
 import pandas as pd
 import networkx as nx
+import itertools
+from math import factorial
 from networkx.algorithms.community import louvain_communities
 from sklearn.metrics.pairwise import cosine_similarity
 from node2vec import Node2Vec
@@ -354,45 +356,127 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     
     return shap_explanation
 
+def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_dir="outputs/plots"):
+    groupes = {
+        "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
+        "Groupe_Communities": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
+        "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
+    }
 
-def save_shap_analysis(shap_exp, feature_names=None, filename="shap_explainer.joblib"):
-    """
-    Sauvegarde avec un chemin absolu construit dynamiquement.
-    """
-    # Construction du chemin absolu vers le dossier outputs
-    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
-    output_path = os.path.join(output_dir, filename)
+    if baseline=="CaseByCase" : 
+        print("Custom SHAP baseline : case by case")
+        baseline_map = {
+            # Zéro pour la structure : 
+            "cn": 0, "aa": 0, "pa": 0,  
+            # Moyenne pour le continu :
+            "n2v_p2_q0.5_cosine": X_train["n2v_p2_q0.5_cosine"].mean(),
+            "n2v_p1_q1_cosine": X_train["n2v_p1_q1_cosine"].mean(),
+            "n2v_p2_q0.5_dist": X_train["n2v_p2_q0.5_dist"].mean(),
+            "n2v_p1_q1_dist": X_train["n2v_p1_q1_dist"].mean(),
+            # Mode pour le catégoriel
+            "community_u": X_train["community_u"].mode()[0] # Mode pour le catégoriel
+        }
     
-    # Création du dossier (absolu)
-    os.makedirs(output_dir, exist_ok=True)
-    
-    if feature_names is not None:
-        shap_exp.feature_names = feature_names
-    
-    # Sauvegarde
-    joblib.dump(shap_exp, output_path)
-    print(f"Shap_explainer sauvegardé : {output_path}")
+    elif baseline =="general" :
+        print("Custom SHAP baseline : general")
+        baseline_map = {}
+        # Structure -> Zéro (Absence de connexion)
+        for m in groupes["Groupe_Structure"]:
+            baseline_map[m] = 0
+        # Attributs -> -1 (Catégorie inconnue)
+        for m in groupes["Groupe_Communities"]:
+            baseline_map[m] = -1
+        # Embeddings -> Moyenne (Bruit blanc statistique)
+        means = X_train[groupes["Groupe_Embeddings"]].mean()
+        for m in groupes["Groupe_Embeddings"]:
+            baseline_map[m] = means[m]
 
-    return output_path
-    
-def load_shap_analysis(filename="shap_explainer.joblib"):
+    else: 
+        print("Custom SHAP baseline : Mean for all")
+        baseline_map = {}
+        overall_means = X_train.mean()
+        for group_name, features in groupes.items():
+            for f in features:
+                baseline_map[f] = overall_means[f]
+
+    n_groups = len(groupes)
+    group_names = list(groupes.keys())
+
+    def _get_val_for_coalition(coalition_mask, sample):
+        """
+        coalition_mask: liste de booléens (ex: [True, False, True]) 
+        indiquant quels groupes on garde.
+        """
+        x_mapped = sample.copy()
+        for i, name in enumerate(group_names):
+            if not coalition_mask[i]:
+                indices = groupes[name]
+                # On applique la baseline spécifique à chaque métrique du groupe
+                x_mapped[indices] = [baseline_map[m] for m in indices]
+        return model.predict_proba([x_mapped])[0][1]
+
+    # Stockage des SHAP values finales
+    shap_values_coalition = np.zeros((len(X_test), n_groups))
+
+    # 3. Boucle sur chaque échantillon (Sample)
+    # --- Calcul des SHAP values ---
+    for idx in range(len(X_test)):
+        x_sample = X_test.iloc[idx]
+        print(f"Calcul des group SHAP-values : groupe {idx} / {len(X_test)} ")
+        
+        for i in range(n_groups):
+            phi_i = 0
+            other_indices = [g for g in range(n_groups) if g != i]
+            
+            for r in range(len(other_indices) + 1):
+                for subset in itertools.combinations(other_indices, r):
+                    # Poids de Shapley
+                    weight = factorial(len(subset)) * factorial(n_groups - len(subset) - 1) / factorial(n_groups)
+                    
+                    # Masques
+                    mask_S = [False] * n_groups
+                    for s_idx in subset: mask_S[s_idx] = True
+                    
+                    mask_Si = list(mask_S)
+                    mask_Si[i] = True
+                    
+                    # Différence marginale
+                    v_Si = _get_val_for_coalition(mask_Si, x_sample)
+                    v_S = _get_val_for_coalition(mask_S, x_sample)
+                    
+                    phi_i += weight * (v_Si - v_S)
+            
+            shap_values_coalition[idx, i] = phi_i
+
+    return pd.DataFrame(shap_values_coalition, columns=group_names)
+
+def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
     """
-    Charge l'objet SHAP complet depuis le dossier des résultats.
+    Gère la sauvegarde et le chargement d'objets en .joblib (SHAP, XGBoost, etc.).
     """
-    root = Path(PROJECT_ROOT)
-    input_path = root / "outputs" / "results" / filename    
-    
-    if not input_path.exists():
-        raise FileNotFoundError(f"Impossible de trouver le fichier : {input_path}")
-    
-    # Chargement
-    shap_exp = joblib.load(input_path)
-    
-    print(f" Analyse SHAP chargée avec succès depuis : {input_path}")
-    print(f" Nombre d'échantillons : {shap_exp.values.shape[0]}")
-    print(f" Nombre de features : {shap_exp.values.shape[1]}")
-    
-    return shap_exp
+    base_path = Path(PROJECT_ROOT) if 'PROJECT_ROOT' in globals() else Path.cwd()
+    target_path = base_path / "outputs" / "results" / filename
+
+    if mode == "save":
+        if data is None:
+            print("Erreur : Aucun objet fourni pour la sauvegarde.")
+            return None
+        
+        # Création du dossier
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        joblib.dump(data, target_path, compress=3)
+        print(f"Objet sauvegardé dans : {target_path}")
+        return target_path
+
+    elif mode == "load":
+        if not target_path.exists():
+            raise FileNotFoundError(f"Fichier introuvable : {target_path}")
+        
+        obj = joblib.load(target_path)
+        print(f"Objet chargé avec succès depuis : {target_path}")
+        
+        return obj
 
 
 def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
@@ -421,3 +505,4 @@ def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/p
     plt.close()
     
     return df_ranks
+
