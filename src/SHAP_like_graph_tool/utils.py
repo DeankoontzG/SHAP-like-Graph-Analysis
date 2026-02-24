@@ -425,7 +425,6 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
     # --- Calcul des SHAP values ---
     for idx in range(len(X_test)):
         x_sample = X_test.iloc[idx]
-        print(f"Calcul des group SHAP-values : groupe {idx} / {len(X_test)} ")
         
         for i in range(n_groups):
             phi_i = 0
