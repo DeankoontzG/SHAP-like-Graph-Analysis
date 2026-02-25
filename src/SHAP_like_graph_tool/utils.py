@@ -1,4 +1,5 @@
 import random
+from re import X
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -183,9 +184,9 @@ def _appendLouvainCommunities(G, dataFrame):
             
     louvain_communities_data = dataFrame.copy()
 
-    louvain_communities_data["community_u"] = louvain_communities_data["u"].map(node_to_community)
-    louvain_communities_data["community_v"] = louvain_communities_data["v"].map(node_to_community)
-    louvain_communities_data["same_community"] = (louvain_communities_data["community_u"] == louvain_communities_data["community_v"]).astype(int)
+    louvain_communities_data["louvain_u"] = louvain_communities_data["u"].map(node_to_community)
+    louvain_communities_data["louvain_v"] = louvain_communities_data["v"].map(node_to_community)
+    louvain_communities_data["same_louvain"] = (louvain_communities_data["louvain_u"] == louvain_communities_data["louvain_v"]).astype(int)
     
     return louvain_communities_data
 
@@ -232,9 +233,9 @@ def _appendGraphToolSBM(G_nx, dataFrame):
     node_to_community = {nodes_list[i]: int(blocks[i]) for i in range(len(nodes_list))}
             
     sbm_data = dataFrame.copy()
-    sbm_data["community_u"] = sbm_data["u"].map(node_to_community)
-    sbm_data["community_v"] = sbm_data["v"].map(node_to_community)
-    sbm_data["same_community"] = (sbm_data["community_u"] == sbm_data["community_v"]).astype(int)
+    sbm_data["sbm_community_u"] = sbm_data["u"].map(node_to_community)
+    sbm_data["sbm_community_v"] = sbm_data["v"].map(node_to_community)
+    sbm_data["same_sbm_community"] = (sbm_data["sbm_community_u"] == sbm_data["sbm_community_v"]).astype(int)
     
     return sbm_data
 
@@ -296,18 +297,6 @@ def _append_node2vec_features(G, dataFrame, p,q, dimensions=64):
     
     return dataFrame
 
-def save_dataset(dataset, filename="dataset"):
-    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
-    output_path = os.path.join(output_dir, filename)
-    
-    # Création du dossier (absolu)
-    os.makedirs(output_dir, exist_ok=True)
-    
-    dataset.to_parquet(output_path, index=False)
-    print(f"Dataset (DataFrame) sauvegardé : {output_path}")
-
-    return output_path
-
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
@@ -337,35 +326,41 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     if len(shap_values.shape) == 3:
         shap_values = shap_values[:, :, 1]
     
-    """
+    return shap_explanation
+
+def display_shap(graphname, output_dir="outputs/plots"):
+
+    filename = f"shap_explainer_{graphname}.joblib"
+    shap_explainer = loadsave_data_joblib(data=None, filename=filename, mode="load")
+
     # --- GÉNÉRATION DES PLOTS ---
     os.makedirs(output_dir, exist_ok=True)
-
+    
     # Plot 1: Summary Points (Beeswarm)
     plt.figure(figsize=(12, 8))
     # On peut passer l'objet explanation directement, c'est plus moderne
-    shap.plots.beeswarm(shap_explanation, show=False)
+    shap.plots.beeswarm(shap_explainer, show=False)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_summary_points.png"))
+    plt.savefig(os.path.join(output_dir, f"shap_summary_points_{graphname}.png"))
     plt.close()
 
     # Plot 2: Summary Bar
     plt.figure(figsize=(12, 8))
-    shap.plots.bar(shap_explanation, show=False)
+    shap.plots.bar(shap_explainer, show=False)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_summary_bar.png"))
+    plt.savefig(os.path.join(output_dir, f"shap_summary_bar_{graphname}.png"))
     plt.close()
-    """
-    
-    return shap_explanation
+
+    return 1
 
 def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_dir="outputs/plots"):
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Communities": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
+        #"Groupe_Communities": ['sbm_community_u', 'sbm_community_v', 'same_csbm_community_u', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        "Groupe_Communities": ['group_u', 'group_v',  'same_group'],
         "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
     }
-
+    
     if baseline=="CaseByCase" : 
         print("Custom SHAP baseline : case by case")
         baseline_map = {
@@ -452,6 +447,63 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
 
     return pd.DataFrame(shap_values_coalition, columns=group_names)
 
+def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
+    """Calcule la distribution des rangs et génère le barplot du Top 5."""
+    abs_shap = np.abs(shap_values)
+    ranks = np.argsort(-abs_shap, axis=1)
+    
+    ranking_stats = {}
+    n_samples, n_features = shap_values.shape
+
+    for i, name in enumerate(feature_names):
+        feature_ranks = np.where(ranks == i)[1] + 1
+        counts = np.bincount(feature_ranks, minlength=n_features + 1)[1:]
+        ranking_stats[name] = (counts / n_samples) * 100
+
+    df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
+    
+    # Plot 3: Top 5 Appearance
+    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
+    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
+    plt.close()
+    
+    return df_ranks
+
+########################################
+## FONCTIONS UTILITAIRES DE LOAD SAVE ##
+########################################
+
+def save_dataset(dataset, filename="dataset"):
+    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    output_path = os.path.join(output_dir, filename)
+    
+    # Création du dossier (absolu)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    dataset.to_parquet(output_path, index=False)
+    print(f"Dataset (DataFrame) sauvegardé : {output_path}")
+
+    return output_path
+
+def load_dataset(filename="dataset"):
+    input_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    input_path = os.path.join(input_dir, filename)
+    
+    if not os.path.exists(input_path):
+        print(f"Erreur : Le fichier n'existe pas : {input_path}")
+        return None
+    
+    dataset = pd.read_parquet(input_path)
+    print(f" Dataset chargé avec succès depuis : {input_path}")
+    print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
+    
+    return dataset
+
 def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
     """
     Gère la sauvegarde et le chargement d'objets en .joblib (SHAP, XGBoost, etc.).
@@ -480,31 +532,11 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
         
         return obj
 
+def load_all_data_for_graph(Graph_name):
 
-def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
-    """Calcule la distribution des rangs et génère le barplot du Top 5."""
-    abs_shap = np.abs(shap_values)
-    ranks = np.argsort(-abs_shap, axis=1)
-    
-    ranking_stats = {}
-    n_samples, n_features = shap_values.shape
+    dataset_w_com_and_dist = load_dataset(filename=f"dataset_w_com_and_dist_{Graph_name}")
+    xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{Graph_name}.joblib", mode="load")
+    shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
+    shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
 
-    for i, name in enumerate(feature_names):
-        feature_ranks = np.where(ranks == i)[1] + 1
-        counts = np.bincount(feature_ranks, minlength=n_features + 1)[1:]
-        ranking_stats[name] = (counts / n_samples) * 100
-
-    df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
-    
-    # Plot 3: Top 5 Appearance
-    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
-    plt.figure(figsize=(12, 7))
-    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
-    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
-    plt.close()
-    
-    return df_ranks
-
+    return dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis

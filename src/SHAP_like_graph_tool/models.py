@@ -12,10 +12,14 @@ import seaborn as sns
 import os
 
 
-def train_and_eval_xgboost(dataFrame, features, plot = False):
+def train_and_eval_xgboost(dataFrame, features=None, plot = False):
     all_stats = []
 
-    X = dataFrame[features]
+    if features == None : 
+        X = dataFrame.drop('target', axis=1)
+    else : 
+        X = dataFrame[features]
+
     y = dataFrame['target']
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -53,10 +57,52 @@ def train_and_eval_xgboost(dataFrame, features, plot = False):
         'AP': ap,
         'AUC-PR': auc_pr
     })
+    
     print("\n RÉSULTATS")
     print(all_stats)
+
+    all_stats = pd.DataFrame(all_stats)
     
-    return pd.DataFrame(all_stats), model, X_test, X_train, y_test, y_train
+    return all_stats, model, X_test, X_train, y_test, y_train
+
+def evaluate_model_performance(model, X_test, y_test, plot=False):
+    """
+    Évalue un modèle déjà entraîné et retourne les métriques de performance.
+    """
+    probs = model.predict_proba(X_test)[:, 1]
+    preds = (probs > 0.5).astype(int)
+    
+    # Calcul des métriques
+    auc_roc = roc_auc_score(y_test, probs)
+    ap = average_precision_score(y_test, probs)
+    f1 = f1_score(y_test, preds)
+
+    precision, recall, _ = precision_recall_curve(y_test, probs)
+    auc_pr = auc(recall, precision)
+
+    # Affichage des graphiques
+    if plot:
+        try:
+            plot_confusion_matrix(y_test, preds)
+            plot_probability_distribution(y_test, probs)
+        except NameError:
+            print("Fonctions de plot (confusion/distribution) non définies.")
+
+    # Compilation
+    stats = {
+        'F1-Score': round(f1, 4),
+        'AUC-ROC': round(auc_roc, 4),
+        'AP': round(ap, 4),
+        'AUC-PR': round(auc_pr, 4)
+    }
+
+    print("\n RÉSULTATS D'ÉVALUATION")
+    print("-" * 30)
+    for k, v in stats.items():
+        print(f"{k:<10} : {v}")
+    print("-" * 30)
+    
+    return pd.DataFrame([stats])
 
 def plot_confusion_matrix(y_true, y_preds):
     # Calcul de la matrice
