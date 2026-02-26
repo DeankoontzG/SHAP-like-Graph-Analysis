@@ -16,7 +16,7 @@ def train_and_eval_xgboost(dataFrame, features=None, plot = False):
     all_stats = []
 
     if features == None : 
-        X = dataFrame.drop('target', axis=1)
+        X = dataFrame.drop(["target", "u","v","label"], axis=1)
     else : 
         X = dataFrame[features]
 
