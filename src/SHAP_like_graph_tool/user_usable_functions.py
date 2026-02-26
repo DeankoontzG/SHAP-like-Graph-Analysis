@@ -8,7 +8,7 @@ def execute(G, G_name) :
 
     print("Validation du Graphe terminée. Lancement des calculs...")
     
-    dataset, G_train = prepare_balanced_data_unknown_pos_and_community(G)
+    dataset, G_train = prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0)
 
     dataset_with_communities = computeCommunityFeatures(G_train, dataset)
 

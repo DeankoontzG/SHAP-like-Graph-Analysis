@@ -94,7 +94,7 @@ def _get_topology_features(G, u, v, precomputed, is_existing_edge=False):
     return topo_res
 
 
-def prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=1.0):
+def prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0):
     all_edges = list(G.edges())
     nodes = list(G.nodes())
     n_pos = len(all_edges)
