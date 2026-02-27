@@ -8,19 +8,24 @@ def execute(G, G_name) :
 
     print("Validation du Graphe terminée. Lancement des calculs...")
     
-    dataset, G_train = prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0)
-    save_graph(G_train,f"G_train_{G_name}.json")
+    #dataset = prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0)
+    
+    G_train = hide_graph_links(G, test_size=0.15)
+    loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode= "save")
 
-    dataset_with_communities = computeCommunityFeatures(G_train, dataset)
+    G_train_with_structure = computeStructureFeatures(G_train)
+    G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
+    G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
+    loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode= "save")
 
-    dataset_with_distances = computeDistanceFeatures(G_train, dataset_with_communities)
-
-    save_dataset(dataset_with_distances,f"dataset_w_com_and_dist_{G_name}")
+    print("Sauvegarde du dataset")
+    dataset = prepare_balanced_data(G, G_train)
+    save_dataset(dataset=dataset, filename=f"dataset_{G_name}")
 
     exclude = ['u', 'v', 'target', 'label'] 
-    features = [col for col in dataset_with_distances.columns if col not in exclude]
+    features = [col for col in dataset.columns if col not in exclude]
 
-    results, model, X_test, X_train, y_test, y_train = train_and_eval_xgboost(dataset_with_distances, features=features)
+    results, model, X_test, X_train, y_test, y_train = train_and_eval_xgboost(dataset, features=features)
 
     data_to_save = {
         "results": results,
