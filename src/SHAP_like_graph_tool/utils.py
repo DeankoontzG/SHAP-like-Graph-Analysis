@@ -15,6 +15,7 @@ import os
 import joblib
 import matplotlib.pyplot as plt
 from pathlib import Path
+import json
 
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
@@ -540,3 +541,20 @@ def load_all_data_for_graph(Graph_name):
     shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
 
     return dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis
+
+class GraphEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return super().default(obj)
+
+def save_graph(G, filename):
+    data = nx.node_link_data(G)
+    with open(filename, 'w') as f:
+        json.dump(data, f, cls=GraphEncoder)
+    print(f"Graphe sauvegardé dans {filename}")
+
+def load_graph(filename):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    return nx.node_link_graph(data)
