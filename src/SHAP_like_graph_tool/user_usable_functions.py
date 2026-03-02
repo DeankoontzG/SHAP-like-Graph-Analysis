@@ -18,7 +18,7 @@ def execute(G, G_name) :
     G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
     loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode= "save")
 
-    print("Sauvegarde du dataset")
+    print("Sauvegarde du dataset ")
     dataset = prepare_balanced_data(G, G_train)
     save_dataset(dataset=dataset, filename=f"dataset_{G_name}")
 

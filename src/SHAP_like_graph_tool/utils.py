@@ -25,18 +25,7 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk']
-EMBEDDING_MAPPING = {
-    'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
-    'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
-}
-
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm']
-COMMUNITY_MAPPING = {
-    'louvain': _appendLouvainCommunities,
-    'infomap': _appendInfomapCommunities,
-    'sbm': _appendGraphToolSBM
-}
-
 METRICS_NODE = ["pr", "lcc", "and", "dc"]
 
 #################################################
@@ -197,18 +186,6 @@ def computeStructureFeatures(G_train):
     return G_train
 
 ### Fonction parente qui appelle les différentes fonctions de calcul de features de communauté
-def computeCommunityFeatures(G_train, algos="All"):
-    print("\n--- Enrichissement du Graphe avec les Communautés ---")
-    to_run = COMMUNITY_ALGOS if algos == "All" else algos
-    
-    for algo in to_run:
-        if algo in COMMUNITY_MAPPING:
-            print(f"Calcul des communautés via {algo}...")
-            COMMUNITY_MAPPING[algo](G_train)
-        else:
-            print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
-            
-    return G_train
 
 def _appendLouvainCommunities(G_train):
     communities = nx.community.louvain_communities(G_train, seed=42)
@@ -254,21 +231,26 @@ def _appendGraphToolSBM(G_train):
             
     nx.set_node_attributes(G_train, node_to_community, "sbm_id")
 
-### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
+COMMUNITY_MAPPING = {
+    'louvain': _appendLouvainCommunities,
+    'infomap': _appendInfomapCommunities,
+    'sbm': _appendGraphToolSBM
+}
 
-
-def computeDistanceFeatures(G_train, embeddings="All"):
-    to_run = EMBEDDINGS if embeddings == "All" else embeddings
-    print("\n--- Enrichissement du Graphe avec les Embeddings ---")
-
-    for emb in to_run:
-        if emb in EMBEDDING_MAPPING:
-            print(f"Calcul des embeddings via {emb}...")
-            EMBEDDING_MAPPING[emb](G_train)
+def computeCommunityFeatures(G_train, algos="All"):
+    print("\n--- Enrichissement du Graphe avec les Communautés ---")
+    to_run = COMMUNITY_ALGOS if algos == "All" else algos
+    
+    for algo in to_run:
+        if algo in COMMUNITY_MAPPING:
+            print(f"Calcul des communautés via {algo}...")
+            COMMUNITY_MAPPING[algo](G_train)
         else:
-            print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
+            print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
+            
     return G_train
 
+### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
 
 def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
@@ -298,6 +280,23 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     embeddings = {str(node): model.wv[str(node)] for node in G_train.nodes()}
 
     nx.set_node_attributes(G_train, embeddings, attr_name)
+
+EMBEDDING_MAPPING = {
+    'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
+    'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
+}
+
+def computeDistanceFeatures(G_train, embeddings="All"):
+    to_run = EMBEDDINGS if embeddings == "All" else embeddings
+    print("\n--- Enrichissement du Graphe avec les Embeddings ---")
+
+    for emb in to_run:
+        if emb in EMBEDDING_MAPPING:
+            print(f"Calcul des embeddings via {emb}...")
+            EMBEDDING_MAPPING[emb](G_train)
+        else:
+            print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
+    return G_train
 
 
 ########################################
