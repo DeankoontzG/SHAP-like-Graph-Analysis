@@ -1,4 +1,5 @@
 import random
+from re import X
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -14,9 +15,18 @@ import os
 import joblib
 import matplotlib.pyplot as plt
 from pathlib import Path
+import json
 
+
+###############################################################
+## CONTANTES, DONT MAPPING VERS ALGOS DE CALCUL DE MÉTRIQUES ##
+###############################################################
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
+
+EMBEDDINGS = ['n2v_homophily', 'deepwalk']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm']
+METRICS_NODE = ["pr", "lcc", "and", "dc"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -61,46 +71,9 @@ def validate_input_graph(G, min_nodes=2, min_edges=1, require_undirected=True):
 ########################################
 # FONCTIONS DE CALCUL DES FEATURES #####
 ########################################
-def _get_topology_features(G, u, v, precomputed, is_existing_edge=False):
-    """Calcule les métriques topologiques pour une paire (u, v)"""
-    
-    # 1. Métriques de paires (Voisinage)
-    aa = next(nx.adamic_adar_index(G, [(u, v)]))[2]
-    jc = next(nx.jaccard_coefficient(G, [(u, v)]))[2]
-    pa = next(nx.preferential_attachment(G, [(u, v)]))[2]
-    cn = len(list(nx.common_neighbors(G, u, v)))
-
-    try:
-        sp = nx.shortest_path_length(G, source=u, target=v)
-    except nx.NetworkXNoPath:
-        sp = 0 
-
-    # 2. Métriques de Nœuds (extraites du dictionnaire pré-calculé)
-    # On ajoute les versions pour u et pour v
-    node_features = {
-        'pr_u': precomputed['pr'].get(u, 0), 'pr_v': precomputed['pr'].get(v, 0),
-        'lcc_u': precomputed['lcc'].get(u, 0), 'lcc_v': precomputed['lcc'].get(v, 0),
-        'and_u': precomputed['and'].get(u, 0), 'and_v': precomputed['and'].get(v, 0),
-        'dc_u': precomputed['dc'].get(u, 0), 'dc_v': precomputed['dc'].get(v, 0)
-    }
-
-    # Fusion de toutes les métriques
-    topo_res = {'cn': cn, 'aa': aa, 'jc': jc, 'pa': pa, 
-                'sp': sp
-               }
-    topo_res.update(node_features)
-    
-    return topo_res
-
-
-def prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=1.0):
+def hide_graph_links(G, test_size = 0.15):
     all_edges = list(G.edges())
-    nodes = list(G.nodes())
-    n_pos = len(all_edges)
-    data = []
     random.seed(42)
-
-    # 1. Extraction des arêtes pour le split
     random.shuffle(all_edges)
     
     split_idx = int(len(all_edges) * (1 - test_size))
@@ -116,150 +89,181 @@ def prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negativ
     print(f"Graphe original: {G.number_of_edges()} liens")
     print(f"Graphe d'entraînement: {G_train.number_of_edges()} liens")
     print(f"Liens cachés pour le test: {len(test_edges)}")
-    
 
-    # --- ÉTAPE DE PRÉ-CALCUL ---
-    # On calcule les métriques de noeuds une seule fois ici
-    print("Pré-calcul des métriques de nœuds...")
-    precomputed = {
-        'pr': nx.pagerank(G_train),                    # PageRank (PR)
-        'lcc': nx.clustering(G_train),                # Local Clustering Coefficient (LCC)
-        'and': nx.average_neighbor_degree(G_train),   # Average Neighbor Degree (AND)
-        'dc': nx.degree_centrality(G_train)           # Degree Centrality (DC)
+    return G_train
+
+
+def _extract_pair_features(G_train, u, v):
+    """
+    Aggrège les infos de noeuds (IDs de blocs, centralités) et 
+    calcule les métriques de paires à la volée.
+    """
+    nu = G_train.nodes[u]
+    nv = G_train.nodes[v]
+
+    features = {
+        'cn': len(list(nx.common_neighbors(G_train, u, v))),
+        'aa': next(nx.adamic_adar_index(G_train, [(u, v)]))[2],
+        'jc': next(nx.jaccard_coefficient(G_train, [(u, v)]))[2],
+        'pa': next(nx.preferential_attachment(G_train, [(u, v)]))[2],
+        'sp': nx.shortest_path_length(G_train, u, v) if nx.has_path(G_train, u, v) else 0
     }
-    
+
+    for metric in METRICS_NODE:
+        features[f'{metric}_u'] = nu.get(metric, 0)
+        features[f'{metric}_v'] = nv.get(metric, 0)
+
+    for algo in COMMUNITY_ALGOS:
+        id_u = nu.get(f'{algo}_id')
+        id_v = nv.get(f'{algo}_id')
+        features[f'{algo}_u'] = id_u
+        features[f'{algo}_v'] = id_v
+        features[f'same_{algo}'] = 1 if (id_u == id_v and id_u is not None) else 0
+
+    for emb in EMBEDDINGS:
+        if emb in nu and emb in nv:
+            vec_u = nu[emb].reshape(1, -1)
+            vec_v = nv[emb].reshape(1, -1)
+            features[f'{emb}_cos'] = cosine_similarity(vec_u, vec_v)[0][0]
+            features[f'{emb}_dist'] = np.linalg.norm(vec_u - vec_v)
+
+    return features
+
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
+    """
+    Prépare le dataset final en utilisant G_train pour les features
+    et G pour vérifier l'existence réelle des liens (target).
+    """
+    random.seed(seed)
+    all_edges = list(G.edges())
+    nodes = list(G.nodes())
+    n_pos = len(all_edges)
+    data = []
+
+    print(f"Extraction des features pour {n_pos} liens positifs...")
     # --- 1. CLASSE POSITIVE ---
     for u, v in all_edges:
-        topo = _get_topology_features(G_train, u, v, precomputed, is_existing_edge=True)
-        
-        row = {
-            'u': u, 
-            'v': v,
-            'target': 1
-        }
-        row.update(topo)
+        features = _extract_pair_features(G_train, u, v)
+        row = {'u': u, 'v': v, 'target': 1}
+        row.update(features)
         data.append(row)
     
     # --- 2. CLASSE NÉGATIVE ---
     n_neg_target = int(n_pos * negative_ratio)
+    print(f"Génération de {n_neg_target} non-liens (ratio {negative_ratio})...")
+    
     neg_count = 0
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
-        if not G.has_edge(u, v) and u != v:
-            topo = _get_topology_features(G_train, u, v, precomputed, is_existing_edge=False)
-            
-            row = {
-                'u': u, 
-                'v': v,
-                'target': 0
-            }
-            row.update(topo)
+        if u != v and not G.has_edge(u, v):
+            features = _extract_pair_features(G_train, u, v)
+            row = {'u': u, 'v': v, 'target': 0}
+            row.update(features)
             data.append(row)
             neg_count += 1
 
-    print(f"DataFrame créé <3 : {len(data)} paires de noeuds choisies")
-    return pd.DataFrame(data), G_train
+    df = pd.DataFrame(data)
+    print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
+    return df
+
+### Fonction de calcul de features de structure des noeuds
+def computeStructureFeatures(G_train):
+    print("\n--- Enrichissement du Graphe avec les Métriques de Structure ---")
+    print("Calcul : PageRank, Clustering, Average Neighbor Degree, Degree Centrality")
+    pr = nx.pagerank(G_train)
+    lcc = nx.clustering(G_train)
+    avg_nd = nx.average_neighbor_degree(G_train)
+    dc = nx.degree_centrality(G_train)
+
+    for node in G_train.nodes():
+        G_train.nodes[node].update({
+            'pr': pr.get(node, 0),
+            'lcc': lcc.get(node, 0),
+            'and': avg_nd.get(node, 0),
+            'dc': dc.get(node, 0)
+        })
+    
+    return G_train
 
 ### Fonction parente qui appelle les différentes fonctions de calcul de features de communauté
-def computeCommunityFeatures(G, dataFrame, features = "All"):
-    print("\n")
-    print("--- Calcul des métriques de communauté ---")
-    print("Calcul des communautés de louvain...")
-    dataFrame = _appendLouvainCommunities(G, dataFrame=dataFrame)
-    print("Calcul des communautés via Infomap...")
-    dataFrame = _appendInfomapCommunities(G, dataFrame=dataFrame)
-    print("Calcul des communautés via SBM...")
-    dataFrame = _appendGraphToolSBM(G, dataFrame=dataFrame)
 
-    return dataFrame
-
-def _appendLouvainCommunities(G, dataFrame):
-    communities = nx.community.louvain_communities(G, seed=42)
+def _appendLouvainCommunities(G_train):
+    communities = nx.community.louvain_communities(G_train, seed=42)
 
     node_to_community = {} 
     for i, community in enumerate(communities):
         for node in community:
             node_to_community[node] = i
-            
-    louvain_communities_data = dataFrame.copy()
 
-    louvain_communities_data["community_u"] = louvain_communities_data["u"].map(node_to_community)
-    louvain_communities_data["community_v"] = louvain_communities_data["v"].map(node_to_community)
-    louvain_communities_data["same_community"] = (louvain_communities_data["community_u"] == louvain_communities_data["community_v"]).astype(int)
-    
-    return louvain_communities_data
+    nx.set_node_attributes(G_train, node_to_community, "louvain_id")
 
-def _appendInfomapCommunities(G, dataFrame):
+def _appendInfomapCommunities(G_train):
 
     im = Infomap("--two-level --silent")
     
-    for source, target in G.edges():
+    for source, target in G_train.edges():
         im.add_link(int(source), int(target))
     
     im.run()
 
     node_to_infomap = {node.node_id: node.module_id for node in im.tree if node.is_leaf}
 
-    infomap_data = dataFrame.copy()
+    nx.set_node_attributes(G_train, node_to_infomap, "infomap_id")
 
-    infomap_data["u"] = pd.to_numeric(infomap_data["u"], errors='coerce').astype(int)
-    infomap_data["v"] = pd.to_numeric(infomap_data["v"], errors='coerce').astype(int)
-
-    infomap_data["infomap_u"] = infomap_data["u"].map(node_to_infomap)
-    infomap_data["infomap_v"] = infomap_data["v"].map(node_to_infomap)
-    infomap_data["same_infomap"] = (infomap_data["infomap_u"] == infomap_data["infomap_v"]).astype(int)
-
-    return infomap_data
-
-def _appendGraphToolSBM(G_nx, dataFrame):
+def _appendGraphToolSBM(G_train):
     """
     Inférence SBM via graph-tool avec détection automatique 
     du nombre de blocs (MDL).
     """
-    nodes_list = list(G_nx.nodes())
+    nodes_list = list(G_train.nodes())
     node_index = {node: i for i, node in enumerate(nodes_list)}
     
     G_gt = gt.Graph(directed=False)
     G_gt.add_vertex(len(nodes_list))
     
-    edges = [(node_index[u], node_index[v]) for u, v in G_nx.edges()]
+    edges = [(node_index[u], node_index[v]) for u, v in G_train.edges()]
     G_gt.add_edge_list(edges)
 
     state = gt.minimize_blockmodel_dl(G_gt)
-
     blocks = state.get_blocks()
     
     node_to_community = {nodes_list[i]: int(blocks[i]) for i in range(len(nodes_list))}
             
-    sbm_data = dataFrame.copy()
-    sbm_data["community_u"] = sbm_data["u"].map(node_to_community)
-    sbm_data["community_v"] = sbm_data["v"].map(node_to_community)
-    sbm_data["same_community"] = (sbm_data["community_u"] == sbm_data["community_v"]).astype(int)
+    nx.set_node_attributes(G_train, node_to_community, "sbm_id")
+
+COMMUNITY_MAPPING = {
+    'louvain': _appendLouvainCommunities,
+    'infomap': _appendInfomapCommunities,
+    'sbm': _appendGraphToolSBM
+}
+
+def computeCommunityFeatures(G_train, algos="All"):
+    print("\n--- Enrichissement du Graphe avec les Communautés ---")
+    to_run = COMMUNITY_ALGOS if algos == "All" else algos
     
-    return sbm_data
+    for algo in to_run:
+        if algo in COMMUNITY_MAPPING:
+            print(f"Calcul des communautés via {algo}...")
+            COMMUNITY_MAPPING[algo](G_train)
+        else:
+            print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
+            
+    return G_train
 
 ### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
-def computeDistanceFeatures(G, dataFrame, features = "All"):
-    print("\n")
-    print("--- Calcul des métriques de distance ---")
-    print("Calcul de Node2Vec homophilie p=2, q=0.5 ...")
-    dataFrame = _append_node2vec_features(G, dataFrame=dataFrame, p=2, q=0.5)
-    print("Calcul de DeepWalk p=1, q=1 ...")
-    dataFrame = _append_node2vec_features(G, dataFrame=dataFrame, p=1, q=1)
 
-    return dataFrame
-
-def _append_node2vec_features(G, dataFrame, p,q, dimensions=64):
+def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
     Génère les embeddings Node2Vec et retourne un dictionnaire {node_id: vector}
     """
+    print(f"Calcul de Node2Vec (p={p}, q={q})...")
     print(f"Génération des marches aléatoires (dim={dimensions})...")
     
     # Configuration de Node2Vec
     # p=1, q=1 -> équivalent à DeepWalk
     # p=1, q=2 -> Favorise l'exploration locale (structure)
     # p=2, q=0.5 -> Favorise l'exploration lointaine (communautés) - homophilie
-    node2vec = Node2Vec(G, 
+    node2vec = Node2Vec(G_train, 
                         dimensions=dimensions, 
                         walk_length=30, 
                         num_walks=100, 
@@ -273,40 +277,50 @@ def _append_node2vec_features(G, dataFrame, p,q, dimensions=64):
         model = node2vec.fit(window=10, min_count=1, batch_words=4, size=dimensions)
     
     # On récupère les vecteurs dans un dictionnaire
-    embeddings = {str(node): model.wv[str(node)] for node in G.nodes()}
+    embeddings = {node: model.wv[str(node)] for node in G_train.nodes()}
+    nx.set_node_attributes(G_train, embeddings, attr_name)
 
-    def _get_cosine_sim(u, v):
-        key_u = str(int(float(u))) 
-        key_v = str(int(float(v)))
-        vec_u = embeddings[key_u].reshape(1, -1)
-        vec_v = embeddings[key_v].reshape(1, -1)
-        return cosine_similarity(vec_u, vec_v)[0][0]
+EMBEDDING_MAPPING = {
+    'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
+    'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
+}
 
-    def _get_l2_dist(u, v):
-        key_u = str(int(float(u))) 
-        key_v = str(int(float(v)))
-        vec_u = embeddings[key_u]
-        vec_v = embeddings[key_v]
-        return np.linalg.norm(vec_u - vec_v)
+def computeDistanceFeatures(G_train, embeddings="All"):
+    to_run = EMBEDDINGS if embeddings == "All" else embeddings
+    print("\n--- Enrichissement du Graphe avec les Embeddings ---")
 
-    print("Calcul des distances vectorielles pour chaque paire...")
+    for emb in to_run:
+        if emb in EMBEDDING_MAPPING:
+            print(f"Calcul des embeddings via {emb}...")
+            EMBEDDING_MAPPING[emb](G_train)
+        else:
+            print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
+    return G_train
 
-    dataFrame[f'n2v_p{p}_q{q}_cosine'] = dataFrame.apply(lambda row: _get_cosine_sim(row['u'], row['v']), axis=1)
-    dataFrame[f'n2v_p{p}_q{q}_dist'] = dataFrame.apply(lambda row: _get_l2_dist(row['u'], row['v']), axis=1)
-    
-    return dataFrame
+def enrich_dataset_with_ground_truth(df, G):
+    """
+    Ajoute les infos réelles de position et block du graphe initial, pour les graphes générés artificiellement.
+    """
+    pos_dict = nx.get_node_attributes(G, 'pos')
+    block_dict = nx.get_node_attributes(G, 'block')
 
-def save_dataset(dataset, filename="dataset"):
-    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
-    output_path = os.path.join(output_dir, filename)
-    
-    # Création du dossier (absolu)
-    os.makedirs(output_dir, exist_ok=True)
-    
-    dataset.to_parquet(output_path, index=False)
-    print(f"Dataset (DataFrame) sauvegardé : {output_path}")
+    df['block_reel_u'] = df['u'].map(block_dict)
+    df['block_reel_v'] = df['v'].map(block_dict)
 
-    return output_path
+    df['same_block_reel'] = (df['block_reel_u'] == df['block_reel_v']).astype(int)
+
+    def calculate_dist(row):
+        u, v = row['u'], row['v']
+        if u in pos_dict and v in pos_dict:
+            p1 = np.array(pos_dict[u])
+            p2 = np.array(pos_dict[v])
+            return np.linalg.norm(p1 - p2)
+        return None
+
+    print("Calcul des distances réelles...")
+    df['dist_reele'] = df.apply(calculate_dist, axis=1)
+
+    return df
 
 
 ########################################
@@ -337,35 +351,41 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     if len(shap_values.shape) == 3:
         shap_values = shap_values[:, :, 1]
     
-    """
+    return shap_explanation
+
+def display_shap(graphname, output_dir="outputs/plots"):
+
+    filename = f"shap_explainer_{graphname}.joblib"
+    shap_explainer = loadsave_data_joblib(data=None, filename=filename, mode="load")
+
     # --- GÉNÉRATION DES PLOTS ---
     os.makedirs(output_dir, exist_ok=True)
-
+    
     # Plot 1: Summary Points (Beeswarm)
     plt.figure(figsize=(12, 8))
     # On peut passer l'objet explanation directement, c'est plus moderne
-    shap.plots.beeswarm(shap_explanation, show=False)
+    shap.plots.beeswarm(shap_explainer, show=False)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_summary_points.png"))
+    plt.savefig(os.path.join(output_dir, f"shap_summary_points_{graphname}.png"))
     plt.close()
 
     # Plot 2: Summary Bar
     plt.figure(figsize=(12, 8))
-    shap.plots.bar(shap_explanation, show=False)
+    shap.plots.bar(shap_explainer, show=False)
     plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_summary_bar.png"))
+    plt.savefig(os.path.join(output_dir, f"shap_summary_bar_{graphname}.png"))
     plt.close()
-    """
-    
-    return shap_explanation
+
+    return 1
 
 def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_dir="outputs/plots"):
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Communities": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
+        #"Groupe_Communities": ['sbm_community_u', 'sbm_community_v', 'same_csbm_community_u', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        "Groupe_Communities": ['group_u', 'group_v',  'same_group'],
         "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
     }
-
+    
     if baseline=="CaseByCase" : 
         print("Custom SHAP baseline : case by case")
         baseline_map = {
@@ -425,7 +445,6 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
     # --- Calcul des SHAP values ---
     for idx in range(len(X_test)):
         x_sample = X_test.iloc[idx]
-        print(f"Calcul des group SHAP-values : groupe {idx} / {len(X_test)} ")
         
         for i in range(n_groups):
             phi_i = 0
@@ -452,6 +471,63 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
             shap_values_coalition[idx, i] = phi_i
 
     return pd.DataFrame(shap_values_coalition, columns=group_names)
+
+def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
+    """Calcule la distribution des rangs et génère le barplot du Top 5."""
+    abs_shap = np.abs(shap_values)
+    ranks = np.argsort(-abs_shap, axis=1)
+    
+    ranking_stats = {}
+    n_samples, n_features = shap_values.shape
+
+    for i, name in enumerate(feature_names):
+        feature_ranks = np.where(ranks == i)[1] + 1
+        counts = np.bincount(feature_ranks, minlength=n_features + 1)[1:]
+        ranking_stats[name] = (counts / n_samples) * 100
+
+    df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
+    
+    # Plot 3: Top 5 Appearance
+    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
+    plt.figure(figsize=(12, 7))
+    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
+    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
+    plt.close()
+    
+    return df_ranks
+
+########################################
+## FONCTIONS UTILITAIRES DE LOAD SAVE ##
+########################################
+
+def save_dataset(dataset, filename="dataset"):
+    output_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    output_path = os.path.join(output_dir, filename)
+    
+    # Création du dossier (absolu)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    dataset.to_parquet(output_path, index=False)
+    print(f"Dataset (DataFrame) sauvegardé : {output_path}")
+
+    return output_path
+
+def load_dataset(filename="dataset"):
+    input_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
+    input_path = os.path.join(input_dir, filename)
+    
+    if not os.path.exists(input_path):
+        print(f"Erreur : Le fichier n'existe pas : {input_path}")
+        return None
+    
+    dataset = pd.read_parquet(input_path)
+    print(f" Dataset chargé avec succès depuis : {input_path}")
+    print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
+    
+    return dataset
 
 def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
     """
@@ -481,31 +557,35 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
         
         return obj
 
+def load_all_data_for_graph(Graph_name):
 
-def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
-    """Calcule la distribution des rangs et génère le barplot du Top 5."""
-    abs_shap = np.abs(shap_values)
-    ranks = np.argsort(-abs_shap, axis=1)
-    
-    ranking_stats = {}
-    n_samples, n_features = shap_values.shape
+    try:
+        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{Graph_name}", mode="load")
+    except:
+        G_train = nx.Graph()
+    dataset_w_com_and_dist = load_dataset(filename=f"dataset_w_com_and_dist_{Graph_name}")
+    xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{Graph_name}.joblib", mode="load")
+    shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
+    shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
 
-    for i, name in enumerate(feature_names):
-        feature_ranks = np.where(ranks == i)[1] + 1
-        counts = np.bincount(feature_ranks, minlength=n_features + 1)[1:]
-        ranking_stats[name] = (counts / n_samples) * 100
+    return G_train, dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis
 
-    df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
-    
-    # Plot 3: Top 5 Appearance
-    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
-    plt.figure(figsize=(12, 7))
-    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
-    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
-    plt.close()
-    
-    return df_ranks
+class GraphEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, set):
+            return list(obj)
+        return super().default(obj)
 
+def save_graph(G, filename):
+    base_path = Path(PROJECT_ROOT) if 'PROJECT_ROOT' in globals() else Path.cwd()
+    target_path = base_path / "outputs" / "results" / filename
+
+    data = nx.node_link_data(G)
+    with open(filename, 'w') as f:
+        json.dump(data, f, cls=GraphEncoder)
+    print(f"Graphe sauvegardé dans {filename}")
+
+def load_graph(filename):
+    with open(filename, 'r') as f:
+        data = json.load(f)
+    return nx.node_link_graph(data)

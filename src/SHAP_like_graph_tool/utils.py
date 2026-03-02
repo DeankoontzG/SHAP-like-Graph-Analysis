@@ -559,7 +559,10 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
 
 def load_all_data_for_graph(Graph_name):
 
-    G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{Graph_name}", mode= "load")
+    try:
+        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{Graph_name}", mode="load")
+    except:
+        G_train = nx.Graph()
     dataset_w_com_and_dist = load_dataset(filename=f"dataset_w_com_and_dist_{Graph_name}")
     xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{Graph_name}.joblib", mode="load")
     shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
