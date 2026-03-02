@@ -277,8 +277,7 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
         model = node2vec.fit(window=10, min_count=1, batch_words=4, size=dimensions)
     
     # On récupère les vecteurs dans un dictionnaire
-    embeddings = {str(node): model.wv[str(node)] for node in G_train.nodes()}
-
+    embeddings = {node: model.wv[str(node)] for node in G_train.nodes()}
     nx.set_node_attributes(G_train, embeddings, attr_name)
 
 EMBEDDING_MAPPING = {
