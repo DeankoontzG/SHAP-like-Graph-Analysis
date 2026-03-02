@@ -20,6 +20,7 @@ def execute(G, G_name) :
 
     print("Sauvegarde du dataset ")
     dataset = prepare_balanced_data(G, G_train)
+    dataset = enrich_dataset_with_ground_truth(dataset, G)
     save_dataset(dataset=dataset, filename=f"dataset_{G_name}")
 
     exclude = ['u', 'v', 'target', 'label'] 
