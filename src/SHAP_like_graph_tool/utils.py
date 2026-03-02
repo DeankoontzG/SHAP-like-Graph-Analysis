@@ -297,6 +297,31 @@ def computeDistanceFeatures(G_train, embeddings="All"):
             print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
     return G_train
 
+def enrich_dataset_with_ground_truth(df, G):
+    """
+    Ajoute les infos réelles de position et block du graphe initial, pour les graphes générés artificiellement.
+    """
+    pos_dict = nx.get_node_attributes(G, 'pos')
+    block_dict = nx.get_node_attributes(G, 'block')
+
+    df['block_reel_u'] = df['u'].map(block_dict)
+    df['block_reel_v'] = df['v'].map(block_dict)
+
+    df['same_block_reel'] = (df['block_reel_u'] == df['block_reel_v']).astype(int)
+
+    def calculate_dist(row):
+        u, v = row['u'], row['v']
+        if u in pos_dict and v in pos_dict:
+            p1 = np.array(pos_dict[u])
+            p2 = np.array(pos_dict[v])
+            return np.linalg.norm(p1 - p2)
+        return None
+
+    print("Calcul des distances réelles...")
+    df['dist_reele'] = df.apply(calculate_dist, axis=1)
+
+    return df
+
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
@@ -534,12 +559,13 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
 
 def load_all_data_for_graph(Graph_name):
 
+    G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{Graph_name}", mode= "load")
     dataset_w_com_and_dist = load_dataset(filename=f"dataset_w_com_and_dist_{Graph_name}")
     xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{Graph_name}.joblib", mode="load")
     shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
     shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
 
-    return dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis
+    return G_train, dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis
 
 class GraphEncoder(json.JSONEncoder):
     def default(self, obj):
