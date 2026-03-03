@@ -10,7 +10,7 @@ def execute(G, G_name) :
     
     #dataset = prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0)
     
-    G_train = hide_graph_links(G, test_size=0.15)
+    G_train, G_eval = hide_graph_links(G, test_size=0.15)
     loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode= "save")
 
     G_train_with_structure = computeStructureFeatures(G_train)
@@ -19,19 +19,27 @@ def execute(G, G_name) :
     loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode= "save")
 
     print("Sauvegarde du dataset ")
-    dataset = prepare_balanced_data(G, G_train)
-    dataset = enrich_dataset_with_ground_truth(dataset, G)
+    dataset_train = prepare_balanced_data(G_train, G_train)
+    dataset_eval = prepare_balanced_data(G_eval, G_train)
+    dataset_train = enrich_dataset_with_ground_truth(dataset_train, G)
+    dataset_eval = enrich_dataset_with_ground_truth(dataset_eval, G)
+
     print("Vérif : colonnes du dataset :")
-    print(dataset.columns)
-    save_dataset(dataset=dataset, filename=f"dataset_{G_name}")
+    print(dataset_train.columns)
+    save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
+    save_dataset(dataset=dataset_eval, filename=f"dataset_eval_{G_name}")
 
     exclude = ['u', 'v', 'target', 'label'] 
-    features = [col for col in dataset.columns if col not in exclude]
+    features = [col for col in dataset_train.columns if col not in exclude]
 
-    results, model, X_test, X_train, y_test, y_train, probs, preds = train_and_eval_xgboost(dataset, features=features)
+    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features)
+    X_eval = dataset_eval[features] if features else dataset_eval.drop(["target", "u", "v", "label"], axis=1)
+    y_eval = dataset_eval['target']
+    results_eval = get_performance_metrics(model, X_eval, y_eval, "Eval_")
+    results_test_eval = pd.concat([results_test, results_eval])
 
     data_to_save = {
-        "results": results,
+        "results": results_test_eval,
         "model": model,
         "X_test": X_test,
         "X_train": X_train,
@@ -43,7 +51,7 @@ def execute(G, G_name) :
     loadsave_data_joblib(data=data_to_save,filename=f"xgboost_data_{G_name}.joblib", mode="save")
 
     print("\n RÉSULTATS")
-    print(results.to_string(index=False))
+    print(results_test_eval.to_string(index=False))
 
     print("\n Shapley va ! Lu.")
 

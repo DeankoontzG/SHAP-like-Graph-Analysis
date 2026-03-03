@@ -12,107 +12,50 @@ import seaborn as sns
 import os
 
 
-def train_and_eval_xgboost(dataFrame, features=None, plot = False):
-    all_stats = []
-
-    if features == None : 
-        X = dataFrame.drop(["target", "u","v","label"], axis=1)
-    else : 
-        X = dataFrame[features]
-
+def train_and_test_xgboost(dataFrame, features=None, plot=False):
+    X = dataFrame[features] if features else dataFrame.drop(["target", "u", "v", "label"], axis=1)
     y = dataFrame['target']
     
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
             
     model = XGBClassifier(
-        n_estimators=100,
-        learning_rate=0.1,
-        max_depth=6,
-        objective='binary:logistic',
-        tree_method='hist', # Méthode plus stable sur beaucoup de systèmes
-        n_jobs=1            # On force 1 seul thread pour éviter les conflits mémoire
+        n_estimators=100, learning_rate=0.1, max_depth=6,
+        objective='binary:logistic', tree_method='hist', n_jobs=1
     )
-    
     model.fit(X_train, y_train)
-            
-    probs = model.predict_proba(X_test)[:, 1]
-    preds = (probs > 0.5).astype(int)
     
-    auc_roc = roc_auc_score(y_test, probs)
-    ap = average_precision_score(y_test, probs)
-    f1 = f1_score(y_test, preds)
-
-    # AUC-PR (Aire sous la courbe Precision-Recall)
-    precision, recall, _ = precision_recall_curve(y_test, probs)
-    auc_pr = auc(recall, precision)
+    test_stats = get_performance_metrics(model, X_test, y_test, prefix="Test_")
 
     if plot == True : 
+        probs = model.predict_proba(X)[:, 1]
+        preds = (probs > 0.5).astype(int)
         plot_confusion_matrix(y_test, preds)
         plot_probability_distribution(y_test, probs)
-
-    # Compilation des résultats
-    all_stats.append({
-        'F1-Score': f1,
-        'AUC-ROC': auc_roc,
-        'AP': ap,
-        'AUC-PR': auc_pr
-    })
     
-    print("\n RÉSULTATS")
-    print(all_stats)
+    return test_stats, model, X_test, y_test
 
-    all_stats = pd.DataFrame(all_stats)
-    
-    return all_stats, model, X_test, X_train, y_test, y_train, probs, preds
 
-def evaluate_model_performance(model, X_test, y_test, plot=False):
-    """
-    Évalue un modèle déjà entraîné et retourne les métriques de performance.
-    """
-    probs = model.predict_proba(X_test)[:, 1]
+def get_performance_metrics(model, X, y, prefix=""):
+    probs = model.predict_proba(X)[:, 1]
     preds = (probs > 0.5).astype(int)
     
-    # Calcul des métriques
-    auc_roc = roc_auc_score(y_test, probs)
-    ap = average_precision_score(y_test, probs)
-    f1 = f1_score(y_test, preds)
+    precision, recall, _ = precision_recall_curve(y, probs)
 
-    precision, recall, _ = precision_recall_curve(y_test, probs)
-    auc_pr = auc(recall, precision)
-
-    # Affichage des graphiques
-    if plot:
-        try:
-            plot_confusion_matrix(y_test, preds)
-            plot_probability_distribution(y_test, probs)
-        except NameError:
-            print("Fonctions de plot (confusion/distribution) non définies.")
-
-    # Compilation
     stats = {
-        'F1-Score': round(f1, 4),
-        'AUC-ROC': round(auc_roc, 4),
-        'AP': round(ap, 4),
-        'AUC-PR': round(auc_pr, 4)
+        f'{prefix}AP': average_precision_score(y, probs),
+        f'{prefix}AUC-ROC': roc_auc_score(y, probs),
+        f'{prefix}F1-Score': f1_score(y, preds),
+        f'{prefix}AUC-PR': auc(recall, precision)
     }
-
-    print("\n RÉSULTATS D'ÉVALUATION")
-    print("-" * 30)
-    for k, v in stats.items():
-        print(f"{k:<10} : {v}")
-    print("-" * 30)
     
     return pd.DataFrame([stats])
 
 def plot_confusion_matrix(y_true, y_preds):
-    # Calcul de la matrice
     cm = confusion_matrix(y_true, y_preds)
     
-    # Création de l'affichage
     plt.figure(figsize=(8, 6))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=['Pas de lien', 'Lien'])
     
-    # On l'affiche avec un style soigné
     disp.plot(cmap='Blues', values_format='d') # 'd' pour les nombres entiers
     
     plt.title(f"Matrice de Confusion")

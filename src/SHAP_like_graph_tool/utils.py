@@ -85,12 +85,16 @@ def hide_graph_links(G, test_size = 0.15):
     G_train = nx.Graph()
     G_train.add_nodes_from(G.nodes())
     G_train.add_edges_from(train_edges)
+
+    G_eval = nx.Graph()
+    G_eval.add_nodes_from(G.nodes())
+    G_eval.add_edges_from(test_edges)
     
     print(f"Graphe original: {G.number_of_edges()} liens")
     print(f"Graphe d'entraînement: {G_train.number_of_edges()} liens")
     print(f"Liens cachés pour le test: {len(test_edges)}")
 
-    return G_train
+    return G_train, G_eval
 
 
 def _extract_pair_features(G_train, u, v):
@@ -101,6 +105,12 @@ def _extract_pair_features(G_train, u, v):
     nu = G_train.nodes[u]
     nv = G_train.nodes[v]
 
+    # On retire le lien si il existe, pour ne pas polluer les heuristiques structurelles. 
+    #Impact mathématique direct sur Jaccard, PA et SP, indirect sur AA, sur CN je suis pas sûr
+    has_edge = G_train.has_edge(u, v)
+    if has_edge:
+        G_train.remove_edge(u, v)   
+
     features = {
         'cn': len(list(nx.common_neighbors(G_train, u, v))),
         'aa': next(nx.adamic_adar_index(G_train, [(u, v)]))[2],
@@ -108,6 +118,9 @@ def _extract_pair_features(G_train, u, v):
         'pa': next(nx.preferential_attachment(G_train, [(u, v)]))[2],
         'sp': nx.shortest_path_length(G_train, u, v) if nx.has_path(G_train, u, v) else 0
     }
+
+    if has_edge:
+        G_train.add_edge(u, v)
 
     for metric in METRICS_NODE:
         features[f'{metric}_u'] = nu.get(metric, 0)
