@@ -57,7 +57,7 @@ def execute(G, G_name) :
 
     print("\n Shapley va ! Lu.")
 
-    shap_explanation = analyze_with_shap(model, X_eval)
+    shap_explanation = analyze_with_shap(model, X_eval, y_eval)
     print("Sauvegarde de l'analyse SHAP")
     loadsave_data_joblib(data=shap_explanation, filename = f"shap_explainer_{G_name}.joblib", mode="save")
     

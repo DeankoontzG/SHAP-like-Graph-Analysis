@@ -341,9 +341,30 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
 ########################################
-def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
-    """Calcule les SHAP values et génère les plots globaux proprement."""
-    # 1. Configuration de l'explainer 'Boîte Noire' (le plus stable sur mon Mac)
+import shap
+import pandas as pd
+
+def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
+    """
+    Calcule les SHAP values sur un échantillon équilibré.
+    Par défaut : tous les positifs (max 2000) et autant de négatifs.
+    """
+    pos_indices = y_test[y_test == 1].index
+    neg_indices = y_test[y_test == 0].index
+
+    # Plafonnage de la classe positive
+    n_pos = min(len(pos_indices), max_pos)
+    pos_sample = pos_indices[:n_pos]
+
+    # Échantillonnage de la classe négative (ratio 1:1 par défaut)
+    n_neg = int(n_pos * negative_ratio)
+    neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
+
+    X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    
+    print(f"Analyse SHAP : {len(pos_sample)} positifs et {len(neg_sample)} négatifs (Total: {len(X_shap)})")
+
+    # Configuration de l'explainer 'Boîte Noire' (le plus stable sur mon Mac)
     # On définit la fonction de prédiction (proba de la classe 1)
     model_predict = lambda x: model.predict_proba(x)[:, 1]
     
@@ -356,7 +377,7 @@ def analyze_with_shap(model, X_test, output_dir="outputs/plots"):
     
     # 2. Calcul effectif des SHAP values
     # On récupère l'objet 'Explanation' complet
-    shap_explanation = explainer(X_test)
+    shap_explanation = explainer(X_shap)
     
     # 3. Extraction des valeurs numériques pour le retour de fonction
     # On récupère les valeurs brutes (.values)
@@ -572,18 +593,50 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
         
         return obj
 
-def load_all_data_for_graph(Graph_name):
-
+def load_all_data_for_graph(G_name):
+    # 1. G_train (avec structure, communautés et distances)
     try:
-        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{Graph_name}", mode="load")
-    except:
+        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{G_name}", mode="load")
+    except Exception:
+        print(f"G_train introuvable pour {G_name}, création d'un graphe vide.")
         G_train = nx.Graph()
-    dataset_w_com_and_dist = load_dataset(filename=f"dataset_w_com_and_dist_{Graph_name}")
-    xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{Graph_name}.joblib", mode="load")
-    shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
-    shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_explainer_{Graph_name}.joblib", mode="load")
 
-    return G_train, dataset_w_com_and_dist, xgboost_data, shap_explainer, shap_analysis
+    # 2. Dataset de Train (via load_dataset)
+    try:
+        dataset_train = load_dataset(filename=f"dataset_train_{G_name}")
+    except Exception:
+        print(f"Dataset de Train introuvable pour {G_name}.")
+        dataset_train = None
+
+    # 3. Dataset d'Évaluation (via load_dataset)
+    try:
+        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}")
+    except Exception:
+        print(f"Dataset d'Évaluation introuvable pour {G_name}.")
+        dataset_eval = None
+
+    # 4. Données XGBoost (Modèle, X_test, etc.)
+    try:
+        xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load")
+    except Exception:
+        print(f"Données XGBoost introuvables pour {G_name}.")
+        xgboost_data = None
+
+    # 5. SHAP Explainer
+    try:
+        shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
+    except Exception:
+        print(f"SHAP Explainer introuvable pour {G_name}.")
+        shap_explainer = None
+
+    # 6. SHAP Analysis
+    try:
+        shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_analysis_{G_name}.joblib", mode="load")
+    except Exception:
+        print(f"SHAP Analysis introuvable pour {G_name}.")
+        shap_analysis = None
+
+    return G_train, dataset_train, dataset_eval, xgboost_data, shap_explainer, shap_analysis
 
 class GraphEncoder(json.JSONEncoder):
     def default(self, obj):
