@@ -63,7 +63,7 @@ def train_and_eval_xgboost(dataFrame, features=None, plot = False):
 
     all_stats = pd.DataFrame(all_stats)
     
-    return all_stats, model, X_test, X_train, y_test, y_train
+    return all_stats, model, X_test, X_train, y_test, y_train, probs, preds
 
 def evaluate_model_performance(model, X_test, y_test, plot=False):
     """

@@ -297,7 +297,7 @@ def computeDistanceFeatures(G_train, embeddings="All"):
             print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
     return G_train
 
-def enrich_dataset_with_ground_truth(df, G):
+def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 ):
     """
     Ajoute les infos réelles de position et block du graphe initial, pour les graphes générés artificiellement.
     """
@@ -306,8 +306,10 @@ def enrich_dataset_with_ground_truth(df, G):
 
     df['block_reel_u'] = df['u'].map(block_dict)
     df['block_reel_v'] = df['v'].map(block_dict)
-
     df['same_block_reel'] = (df['block_reel_u'] == df['block_reel_v']).astype(int)
+
+    df['proba_lien_reelle'] = np.where(df['same_block_reel'] == 1, p_intra, q_inter)
+
 
     def calculate_dist(row):
         u, v = row['u'], row['v']
@@ -318,7 +320,7 @@ def enrich_dataset_with_ground_truth(df, G):
         return None
 
     print("Calcul des distances réelles...")
-    df['dist_reele'] = df.apply(calculate_dist, axis=1)
+    df['dist_reelle'] = df.apply(calculate_dist, axis=1)
 
     return df
 

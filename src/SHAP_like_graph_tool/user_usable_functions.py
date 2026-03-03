@@ -28,7 +28,7 @@ def execute(G, G_name) :
     exclude = ['u', 'v', 'target', 'label'] 
     features = [col for col in dataset.columns if col not in exclude]
 
-    results, model, X_test, X_train, y_test, y_train = train_and_eval_xgboost(dataset, features=features)
+    results, model, X_test, X_train, y_test, y_train, probs, preds = train_and_eval_xgboost(dataset, features=features)
 
     data_to_save = {
         "results": results,
