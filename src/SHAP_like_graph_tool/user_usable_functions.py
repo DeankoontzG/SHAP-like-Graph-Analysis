@@ -20,7 +20,7 @@ def execute(G, G_name) :
 
     print("Sauvegarde du dataset ")
     dataset_train = prepare_balanced_data(G_train, G_train)
-    dataset_eval = prepare_balanced_data(G_eval, G_train)
+    dataset_eval = prepare_balanced_data(G_eval, G_train, negative_ratio = 50.0)
     dataset_train = enrich_dataset_with_ground_truth(dataset_train, G)
     dataset_eval = enrich_dataset_with_ground_truth(dataset_eval, G)
 
@@ -44,7 +44,9 @@ def execute(G, G_name) :
         "X_test": X_test,
         "X_train": X_train,
         "y_test": y_test,
-        "y_train": y_train
+        "y_train": y_train,
+        "X_eval": X_eval,
+        "y_eval": y_eval
     }
 
     print("Sauvegarde des données XGBoost (model,X1yTest et Train)")
@@ -55,7 +57,7 @@ def execute(G, G_name) :
 
     print("\n Shapley va ! Lu.")
 
-    shap_explanation = analyze_with_shap(model, X_test)
+    shap_explanation = analyze_with_shap(model, X_eval)
     print("Sauvegarde de l'analyse SHAP")
     loadsave_data_joblib(data=shap_explanation, filename = f"shap_explainer_{G_name}.joblib", mode="save")
     
