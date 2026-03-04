@@ -21,8 +21,6 @@ def execute(G, G_name) :
     print("Sauvegarde du dataset ")
     dataset_train = prepare_balanced_data(G_train, G_train)
     dataset_eval = prepare_balanced_data(G_eval, G_train, negative_ratio = 50.0)
-    dataset_train = enrich_dataset_with_ground_truth(dataset_train, G)
-    dataset_eval = enrich_dataset_with_ground_truth(dataset_eval, G)
 
     print("Vérif : colonnes du dataset :")
     print(dataset_train.columns)
