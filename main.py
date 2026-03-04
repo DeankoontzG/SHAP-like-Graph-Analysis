@@ -8,7 +8,7 @@ from src.SHAP_like_graph_tool import utils
 
 if __name__ == "__main__":
 
-    for i in np.arange(0.00, 1.05, 0.05):
+    for i in np.arange(0.05, 1.05, 0.05):
     
         print("######################################")
         print(f"#### graph sbm {i:.2f} pos {1-i:.2f} ####")
@@ -25,4 +25,18 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Erreur lors de la conversion : {e}")
                 
-        gp.execute(G,G_name)
+        gp.evaluate(G_name)
+
+    def load_graphml_safe(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            raw_data = f.read()
+
+        clean_data = html.unescape(raw_data)
+        G = nx.read_graphml(io.StringIO(clean_data))
+        
+        print(f"✅ Graphe chargé : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+        return G
+
+    G = load_graphml_safe("graph_library/reel_Airports.graphml")
+    
+    gp.execute(G, "reel_Airports")

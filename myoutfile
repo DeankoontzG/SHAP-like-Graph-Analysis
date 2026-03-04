@@ -1,0 +1,470 @@
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+######################################
+#### graph sbm 0.05 pos 0.95 ####
+######################################
+artificial_graph_sbm_0_05_pos_0_95
+Graphe chargé avec succès : 1000 nœuds et 3500 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_05_pos_0_95.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_05_pos_0_95.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_05_pos_0_95.joblib
+######################################
+#### graph sbm 0.10 pos 0.90 ####
+######################################
+artificial_graph_sbm_0_10_pos_0_90
+Graphe chargé avec succès : 1000 nœuds et 3497 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_10_pos_0_90.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_10_pos_0_90.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_10_pos_0_90.joblib
+######################################
+#### graph sbm 0.15 pos 0.85 ####
+######################################
+artificial_graph_sbm_0_15_pos_0_85
+Graphe chargé avec succès : 1000 nœuds et 3495 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_15_pos_0_85.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_15_pos_0_85.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_15_pos_0_85.joblib
+######################################
+#### graph sbm 0.20 pos 0.80 ####
+######################################
+artificial_graph_sbm_0_20_pos_0_80
+Graphe chargé avec succès : 1000 nœuds et 3495 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_20_pos_0_80.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_20_pos_0_80.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_20_pos_0_80.joblib
+######################################
+#### graph sbm 0.25 pos 0.75 ####
+######################################
+artificial_graph_sbm_0_25_pos_0_75
+Graphe chargé avec succès : 1000 nœuds et 3497 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_25_pos_0_75.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_25_pos_0_75.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_25_pos_0_75.joblib
+######################################
+#### graph sbm 0.30 pos 0.70 ####
+######################################
+artificial_graph_sbm_0_30_pos_0_70
+Graphe chargé avec succès : 1000 nœuds et 3493 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_30_pos_0_70.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_30_pos_0_70.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_30_pos_0_70.joblib
+######################################
+#### graph sbm 0.35 pos 0.65 ####
+######################################
+artificial_graph_sbm_0_35_pos_0_65
+Graphe chargé avec succès : 1000 nœuds et 3487 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_35_pos_0_65.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_35_pos_0_65.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_35_pos_0_65.joblib
+######################################
+#### graph sbm 0.40 pos 0.60 ####
+######################################
+artificial_graph_sbm_0_40_pos_0_60
+Graphe chargé avec succès : 1000 nœuds et 3495 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_40_pos_0_60.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_40_pos_0_60.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_40_pos_0_60.joblib
+######################################
+#### graph sbm 0.45 pos 0.55 ####
+######################################
+artificial_graph_sbm_0_45_pos_0_55
+Graphe chargé avec succès : 1000 nœuds et 3492 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_45_pos_0_55.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_45_pos_0_55.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_45_pos_0_55.joblib
+######################################
+#### graph sbm 0.50 pos 0.50 ####
+######################################
+artificial_graph_sbm_0_50_pos_0_50
+Graphe chargé avec succès : 1000 nœuds et 3492 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_50_pos_0_50.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_50_pos_0_50.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_50_pos_0_50.joblib
+######################################
+#### graph sbm 0.55 pos 0.45 ####
+######################################
+artificial_graph_sbm_0_55_pos_0_45
+Graphe chargé avec succès : 1000 nœuds et 3494 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_55_pos_0_45.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_55_pos_0_45.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_55_pos_0_45.joblib
+######################################
+#### graph sbm 0.60 pos 0.40 ####
+######################################
+artificial_graph_sbm_0_60_pos_0_40
+Graphe chargé avec succès : 1000 nœuds et 3494 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_60_pos_0_40.joblib
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_60_pos_0_40.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_60_pos_0_40.joblib
+######################################
+#### graph sbm 0.65 pos 0.35 ####
+######################################
+artificial_graph_sbm_0_65_pos_0_35
+Graphe chargé avec succès : 1000 nœuds et 3498 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_65_pos_0_35.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_65_pos_0_35.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_65_pos_0_35.joblib
+######################################
+#### graph sbm 0.70 pos 0.30 ####
+######################################
+artificial_graph_sbm_0_70_pos_0_30
+Graphe chargé avec succès : 1000 nœuds et 3492 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_70_pos_0_30.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_70_pos_0_30.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_70_pos_0_30.joblib
+######################################
+#### graph sbm 0.75 pos 0.25 ####
+######################################
+artificial_graph_sbm_0_75_pos_0_25
+Graphe chargé avec succès : 1000 nœuds et 3493 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_75_pos_0_25.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_75_pos_0_25.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_75_pos_0_25.joblib
+######################################
+#### graph sbm 0.80 pos 0.20 ####
+######################################
+artificial_graph_sbm_0_80_pos_0_20
+Graphe chargé avec succès : 1000 nœuds et 3494 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_80_pos_0_20.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_80_pos_0_20.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_80_pos_0_20.joblib
+######################################
+#### graph sbm 0.85 pos 0.15 ####
+######################################
+artificial_graph_sbm_0_85_pos_0_15
+Graphe chargé avec succès : 1000 nœuds et 3496 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_85_pos_0_15.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_85_pos_0_15.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_85_pos_0_15.joblib
+######################################
+#### graph sbm 0.90 pos 0.10 ####
+######################################
+artificial_graph_sbm_0_90_pos_0_10
+Graphe chargé avec succès : 1000 nœuds et 3497 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_90_pos_0_10.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_90_pos_0_10.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_90_pos_0_10.joblib
+######################################
+#### graph sbm 0.95 pos 0.05 ####
+######################################
+artificial_graph_sbm_0_95_pos_0_05
+Graphe chargé avec succès : 1000 nœuds et 3497 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_95_pos_0_05.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_95_pos_0_05.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_95_pos_0_05.joblib
+######################################
+#### graph sbm 1.00 pos 0.00 ####
+######################################
+artificial_graph_sbm_1_00_pos_0_00
+Graphe chargé avec succès : 1000 nœuds et 3500 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_1_00_pos_0_00.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_1_00_pos_0_00.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_1_00_pos_0_00.joblib
+rtificial_graph_sbm_0_15_pos_0_85.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_15_pos_0_85.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_15_pos_0_85.joblib
+######################################
+#### graph sbm 0.20 pos 0.80 ####
+######################################
+artificial_graph_sbm_0_20_pos_0_80
+Graphe chargé avec succès : 1000 nœuds et 3495 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_20_pos_0_80.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_20_pos_0_80.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_20_pos_0_80.joblib
+######################################
+#### graph sbm 0.25 pos 0.75 ####
+######################################
+artificial_graph_sbm_0_25_pos_0_75
+Graphe chargé avec succès : 1000 nœuds et 3497 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_25_pos_0_75.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_25_pos_0_75.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_25_pos_0_75.joblib
+######################################
+#### graph sbm 0.30 pos 0.70 ####
+######################################
+artificial_graph_sbm_0_30_pos_0_70
+Graphe chargé avec succès : 1000 nœuds et 3493 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_30_pos_0_70.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_30_pos_0_70.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_30_pos_0_70.joblib
+######################################
+#### graph sbm 0.35 pos 0.65 ####
+######################################
+artificial_graph_sbm_0_35_pos_0_65
+Graphe chargé avec succès : 1000 nœuds et 3487 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_35_pos_0_65.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_35_pos_0_65.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_35_pos_0_65.joblib
+######################################
+#### graph sbm 0.40 pos 0.60 ####
+######################################
+artificial_graph_sbm_0_40_pos_0_60
+Graphe chargé avec succès : 1000 nœuds et 3495 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_40_pos_0_60.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_40_pos_0_60.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_40_pos_0_60.joblib
+######################################
+#### graph sbm 0.45 pos 0.55 ####
+######################################
+artificial_graph_sbm_0_45_pos_0_55
+Graphe chargé avec succès : 1000 nœuds et 3492 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_45_pos_0_55.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_45_pos_0_55.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_45_pos_0_55.joblib
+######################################
+#### graph sbm 0.50 pos 0.50 ####
+######################################
+artificial_graph_sbm_0_50_pos_0_50
+Graphe chargé avec succès : 1000 nœuds et 3492 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_50_pos_0_50.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_50_pos_0_50.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_50_pos_0_50.joblib
+######################################
+#### graph sbm 0.55 pos 0.45 ####
+######################################
+artificial_graph_sbm_0_55_pos_0_45
+Graphe chargé avec succès : 1000 nœuds et 3494 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_55_pos_0_45.joblib
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/xgboost_data_artificial_graph_sbm_0_55_pos_0_45.joblib
+Custom SHAP baseline : general
+Objet sauvegardé dans : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_analysis_artificial_graph_sbm_0_55_pos_0_45.joblib
+######################################
+#### graph sbm 0.60 pos 0.40 ####
+######################################
+artificial_graph_sbm_0_60_pos_0_40
+Graphe chargé avec succès : 1000 nœuds et 3494 liens.
+Objet chargé avec succès depuis : /home/jovyan/GuilhemDupuy/SHAP-like-Graph-Analysis/outputs/results/shap_explainer_artificial_graph_sbm_0_60_pos_0_40.joblib
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
+/home/jovyan/envs/mon_env_ia/lib/python3.10/site-packages/networkx/readwrite/json_graph/node_link.py:287: FutureWarning: 
+The default value will be changed to `edges="edges" in NetworkX 3.6.
+
+To make this warning go away, explicitly set the edges kwarg, e.g.:
+
+  nx.node_link_graph(data, edges="links") to preserve current behavior, or
+  nx.node_link_graph(data, edges="edges") for forward compatibility.
+  warnings.warn(
