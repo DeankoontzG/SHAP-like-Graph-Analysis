@@ -415,24 +415,24 @@ def display_shap(graphname, output_dir="outputs/plots"):
 
     return 1
 
-def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_dir="outputs/plots"):
+def analyse_with_shap_custom(model, X_eval, X_train, baseline="general", output_dir="outputs/plots"):
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        #"Groupe_Communities": ['sbm_community_u', 'sbm_community_v', 'same_csbm_community_u', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
-        "Groupe_Communities": ['group_u', 'group_v',  'same_group'],
-        "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
+        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        #"Groupe_Communities": ['group_u', 'group_v',  'same_group'],
+        "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
-    
+
     if baseline=="CaseByCase" : 
         print("Custom SHAP baseline : case by case")
         baseline_map = {
             # Zéro pour la structure : 
             "cn": 0, "aa": 0, "pa": 0,  
             # Moyenne pour le continu :
-            "n2v_p2_q0.5_cosine": X_train["n2v_p2_q0.5_cosine"].mean(),
-            "n2v_p1_q1_cosine": X_train["n2v_p1_q1_cosine"].mean(),
-            "n2v_p2_q0.5_dist": X_train["n2v_p2_q0.5_dist"].mean(),
-            "n2v_p1_q1_dist": X_train["n2v_p1_q1_dist"].mean(),
+            "n2v_homophily_cos": X_train["n2v_homophily_cos"].mean(),
+            "n2v_homophily_dist": X_train["n2v_homophily_dist"].mean(),
+            "deepwalk_cos": X_train["deepwalk_cos"].mean(),
+            "deepwalk_dist": X_train["deepwalk_dist"].mean(),
             # Mode pour le catégoriel
             "community_u": X_train["community_u"].mode()[0] # Mode pour le catégoriel
         }
@@ -476,12 +476,12 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
         return model.predict_proba([x_mapped])[0][1]
 
     # Stockage des SHAP values finales
-    shap_values_coalition = np.zeros((len(X_test), n_groups))
+    shap_values_coalition = np.zeros((len(X_eval), n_groups))
 
     # 3. Boucle sur chaque échantillon (Sample)
     # --- Calcul des SHAP values ---
-    for idx in range(len(X_test)):
-        x_sample = X_test.iloc[idx]
+    for idx in range(len(X_eval)):
+        x_sample = X_eval.iloc[idx]
         
         for i in range(n_groups):
             phi_i = 0
