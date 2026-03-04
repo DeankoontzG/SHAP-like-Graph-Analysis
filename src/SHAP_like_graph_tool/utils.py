@@ -14,6 +14,7 @@ import shap
 import os
 import joblib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from pathlib import Path
 import json
 
@@ -508,7 +509,7 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
 
     return pd.DataFrame(shap_values_coalition, columns=group_names)
 
-def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
+def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, output_dir="outputs/plots",):
     """Calcule la distribution des rangs et génère le barplot du Top 5."""
     abs_shap = np.abs(shap_values)
     ranks = np.argsort(-abs_shap, axis=1)
@@ -523,15 +524,23 @@ def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/p
 
     df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
     
-    # Plot 3: Top 5 Appearance
-    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
-    plt.figure(figsize=(12, 7))
-    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
-    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
-    plt.close()
+    if plot : 
+        top_k_displayed = df_ranks.iloc[0:top_k, :].sum(axis=0).sort_values(ascending=False)
+        
+        plt.figure(figsize=(12, 7))
+        
+        sns.barplot(
+            x=top_k_displayed.index, 
+            y=top_k_displayed.values, 
+            hue=top_k_displayed.index, 
+            palette="viridis", 
+            legend=False
+        )
+        
+        plt.title(f"Importance structurelle : % de présence dans le Top {top_k} SHAP")
+        plt.ylabel("% de présence")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
     
     return df_ranks
 
