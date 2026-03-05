@@ -6,7 +6,7 @@ import networkx as nx
 import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
-from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics.pairwise import cosine_similarity, average_precision_score
 from node2vec import Node2Vec
 from infomap import Infomap
 import graph_tool.all as gt
@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
+from sklearn.model_selection import KFold, train_test_split
+from xgboost import XGBClassifier
 
 
 ###############################################################
@@ -438,6 +440,62 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 
     return df
 
+#################################################
+######### FONCTIONS DE CROSS VALIDATION #########
+#################################################
+
+def k_fold_cross_validation(G_train, k=1, param_grid=None, features_list=None):
+    edges = list(G_train.edges())
+    
+    if k == 1:
+        folds = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
+    else:
+        kf = KFold(n_splits=k, shuffle=True, random_state=42)
+        folds = list(kf.split(edges))
+
+    param_scores = {i: [] for i in range(len(param_grid))}
+
+    for train_idx, val_idx in folds:
+        print(f"\n--- Processing Fold ---")
+        
+        current_val_edges = [edges[i] for i in val_idx]
+        train_edges = [edges[i] for i in train_idx]
+        
+        G_fold_train = nx.Graph()
+        G_fold_train.add_nodes_from(G_train.nodes(data=True))
+        G_fold_train.add_edges_from(train_edges)
+        
+        G_fold_train = computeStructureFeatures(G_fold_train)
+        G_fold_train = computeCommunityFeatures(G_fold_train)
+        G_fold_train = computeDistanceFeatures(G_fold_train)
+        
+
+        ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
+        
+        ds_val = prepare_balanced_data(current_val_edges, G_fold_train, negative_ratio=25.0)
+        
+        for i, params in enumerate(param_grid):
+            model = XGBClassifier(**params)
+            model.fit(ds_train[features_list], ds_train['target'])
+            
+            y_probs = model.predict_proba(ds_val[features_list])[:, 1]
+            score = average_precision_score(ds_val['target'], y_probs)
+            
+            param_scores[i].append(score)
+            print(f"Params index {i} - Fold Score: {score:.4f}")
+
+    best_avg_score = -1
+    best_params = None
+
+    for i, params in enumerate(param_grid):
+        avg_score = np.mean(param_scores[i])
+        print(f"\nFinal Avg AP for {params}: {avg_score:.4f}")
+        
+        if avg_score > best_avg_score:
+            best_avg_score = avg_score
+            best_params = params
+
+    return best_params
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
