@@ -98,7 +98,7 @@ def hide_graph_links(G, test_size = 0.15):
     return G_train, G_eval
 
 
-def _extract_pair_features(G_train, u, v):
+def _extract_pair_features(G_train, u, v, densities):
     """
     Aggrège les infos de noeuds (IDs de blocs, centralités) et 
     calcule les métriques de paires à la volée.
@@ -127,12 +127,14 @@ def _extract_pair_features(G_train, u, v):
         features[f'{metric}_u'] = nu.get(metric, 0)
         features[f'{metric}_v'] = nv.get(metric, 0)
 
+
     for algo in COMMUNITY_ALGOS:
         id_u = nu.get(f'{algo}_id')
         id_v = nv.get(f'{algo}_id')
-        features[f'{algo}_u'] = id_u
-        features[f'{algo}_v'] = id_v
-        features[f'same_{algo}'] = 1 if (id_u == id_v and id_u is not None) else 0
+        pair = tuple(sorted((id_u, id_v)))
+
+        features[f'{algo}_density'] = densities[algo].get(pair, 0)
+        features[f'same_{algo}'] = 1 if id_u == id_v else 0
 
     for emb in EMBEDDINGS:
         if emb in nu and emb in nv:
@@ -153,11 +155,12 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     nodes = list(G.nodes())
     n_pos = len(all_edges)
     data = []
+    densities = prepare_all_densities(G_train) # Calcul des densités inter blocs pour les commu
 
     print(f"Extraction des features pour {n_pos} liens positifs...")
     # --- 1. CLASSE POSITIVE ---
     for u, v in all_edges:
-        features = _extract_pair_features(G_train, u, v)
+        features = _extract_pair_features(G_train, u, v, densities)
         row = {'u': u, 'v': v, 'target': 1}
         row.update(features)
         data.append(row)
@@ -170,7 +173,7 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
         if u != v and not G.has_edge(u, v):
-            features = _extract_pair_features(G_train, u, v)
+            features = _extract_pair_features(G_train, u, v, densities)
             row = {'u': u, 'v': v, 'target': 0}
             row.update(features)
             data.append(row)
@@ -213,24 +216,26 @@ def _appendLouvainCommunities(G_train):
     _normalize_community_assignment(G_train, "louvain_id")
 
 def _appendInfomapCommunities(G_train):
-
     im = Infomap("--two-level --silent")
-
-    sample_node = list(G_train.nodes())[0]
-    node_type = type(sample_node)
+    
+    nodes_list = list(G_train.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes_list)}
+    idx_to_node = {i: node for i, node in enumerate(nodes_list)}
     
     for source, target in G_train.edges():
-        im.add_link(int(source), int(target))
+        im.add_link(node_to_idx[source], node_to_idx[target])
     
     im.run()
 
-    node_to_infomap = {
-        node_type(node.node_id): node.module_id 
-        for node in im.tree if node.is_leaf
-    }
+    node_to_infomap = {}
+    for node in im.tree:
+        if node.is_leaf:
+            original_node_name = idx_to_node[node.node_id]
+            node_to_infomap[original_node_name] = node.module_id
 
     nx.set_node_attributes(G_train, node_to_infomap, "infomap_id")
     _normalize_community_assignment(G_train, "infomap_id")
+
 
 def _appendGraphToolSBM(G_train):
     """
@@ -290,6 +295,45 @@ def computeCommunityFeatures(G_train, algos="All"):
             print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
             
     return G_train
+
+def prepare_all_densities(G_train):
+    """
+    Pré-calcule les densités de blocs pour tous les algorithmes.
+    """
+    all_densities = {}
+    
+    for algo in COMMUNITY_ALGOS:
+        attr_name = f"{algo}_id"
+        node_to_block = nx.get_node_attributes(G_train, attr_name)
+        
+        # 1. Compter les membres par bloc
+        block_sizes = pd.Series(node_to_block).value_counts().to_dict()
+        blocks = list(block_sizes.keys())
+        
+        # 2. Compter les liens réels entre blocs (uniquement sur le triangle supérieur)
+        counts = {(b1, b2): 0 for i, b1 in enumerate(blocks) for b2 in blocks[i:]}
+        
+        for u, v in G_train.edges():
+            bu, bv = node_to_block.get(u), node_to_block.get(v)
+            if bu is not None and bv is not None:
+                pair = tuple(sorted((bu, bv)))
+                if pair in counts:
+                    counts[pair] += 1
+        
+        # 3. Calculer les densités (Lien Réels / Liens Possibles)
+        algo_densities = {}
+        for (b1, b2), real_count in counts.items():
+            n1, n2 = block_sizes[b1], block_sizes[b2]
+            if b1 == b2:
+                possible = (n1 * (n1 - 1)) / 2  # Combinaisons intra
+            else:
+                possible = n1 * n2              # Combinaisons inter
+            
+            algo_densities[(b1, b2)] = real_count / possible if possible > 0 else 0
+            
+        all_densities[algo] = algo_densities
+        
+    return all_densities
 
 ### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
 
@@ -446,6 +490,7 @@ def analyse_with_shap_custom(model, X_eval, X_train, baseline="general", output_
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
         "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        #"Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
         #"Groupe_Communities": ['group_u', 'group_v',  'same_group'],
         "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
