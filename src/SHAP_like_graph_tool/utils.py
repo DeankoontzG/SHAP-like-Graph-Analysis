@@ -210,19 +210,27 @@ def _appendLouvainCommunities(G_train):
             node_to_community[node] = i
 
     nx.set_node_attributes(G_train, node_to_community, "louvain_id")
+    _normalize_community_assignment(G_train, "louvain_id")
 
 def _appendInfomapCommunities(G_train):
 
     im = Infomap("--two-level --silent")
+
+    sample_node = list(G_train.nodes())[0]
+    node_type = type(sample_node)
     
     for source, target in G_train.edges():
         im.add_link(int(source), int(target))
     
     im.run()
 
-    node_to_infomap = {node.node_id: node.module_id for node in im.tree if node.is_leaf}
+    node_to_infomap = {
+        node_type(node.node_id): node.module_id 
+        for node in im.tree if node.is_leaf
+    }
 
     nx.set_node_attributes(G_train, node_to_infomap, "infomap_id")
+    _normalize_community_assignment(G_train, "infomap_id")
 
 def _appendGraphToolSBM(G_train):
     """
@@ -244,6 +252,25 @@ def _appendGraphToolSBM(G_train):
     node_to_community = {nodes_list[i]: int(blocks[i]) for i in range(len(nodes_list))}
             
     nx.set_node_attributes(G_train, node_to_community, "sbm_id")
+    _normalize_community_assignment(G_train, "sbm_id")
+
+def _normalize_community_assignment(G, attr_name):
+    """ Remplace les NaN par des IDs uniques (singletons) """
+    nodes_data = nx.get_node_attributes(G, attr_name)
+    
+    current_ids = [int(v) for v in nodes_data.values() if pd.notnull(v)]
+    next_id = max(current_ids) + 1 if current_ids else 0
+    
+    mapping = {}
+    for node in G.nodes():
+        val = nodes_data.get(node)
+        if pd.isnull(val):
+            mapping[node] = next_id
+            next_id += 1
+        else:
+            mapping[node] = val
+            
+    nx.set_node_attributes(G, mapping, attr_name)
 
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,

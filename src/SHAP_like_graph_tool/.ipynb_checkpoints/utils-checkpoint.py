@@ -14,6 +14,7 @@ import shap
 import os
 import joblib
 import matplotlib.pyplot as plt
+import seaborn as sns
 from pathlib import Path
 import json
 
@@ -209,19 +210,27 @@ def _appendLouvainCommunities(G_train):
             node_to_community[node] = i
 
     nx.set_node_attributes(G_train, node_to_community, "louvain_id")
+    _normalize_community_assignment(G_train, "louvain_id")
 
 def _appendInfomapCommunities(G_train):
 
     im = Infomap("--two-level --silent")
+
+    sample_node = list(G_train.nodes())[0]
+    node_type = type(sample_node)
     
     for source, target in G_train.edges():
         im.add_link(int(source), int(target))
     
     im.run()
 
-    node_to_infomap = {node.node_id: node.module_id for node in im.tree if node.is_leaf}
+    node_to_infomap = {
+        node_type(node.node_id): node.module_id 
+        for node in im.tree if node.is_leaf
+    }
 
     nx.set_node_attributes(G_train, node_to_infomap, "infomap_id")
+    _normalize_community_assignment(G_train, "infomap_id")
 
 def _appendGraphToolSBM(G_train):
     """
@@ -243,6 +252,25 @@ def _appendGraphToolSBM(G_train):
     node_to_community = {nodes_list[i]: int(blocks[i]) for i in range(len(nodes_list))}
             
     nx.set_node_attributes(G_train, node_to_community, "sbm_id")
+    _normalize_community_assignment(G_train, "sbm_id")
+
+def _normalize_community_assignment(G, attr_name):
+    """ Remplace les NaN par des IDs uniques (singletons) """
+    nodes_data = nx.get_node_attributes(G, attr_name)
+    
+    current_ids = [int(v) for v in nodes_data.values() if pd.notnull(v)]
+    next_id = max(current_ids) + 1 if current_ids else 0
+    
+    mapping = {}
+    for node in G.nodes():
+        val = nodes_data.get(node)
+        if pd.isnull(val):
+            mapping[node] = next_id
+            next_id += 1
+        else:
+            mapping[node] = val
+            
+    nx.set_node_attributes(G, mapping, attr_name)
 
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
@@ -414,24 +442,24 @@ def display_shap(graphname, output_dir="outputs/plots"):
 
     return 1
 
-def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_dir="outputs/plots"):
+def analyse_with_shap_custom(model, X_eval, X_train, baseline="general", output_dir="outputs/plots"):
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        #"Groupe_Communities": ['sbm_community_u', 'sbm_community_v', 'same_csbm_community_u', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
-        "Groupe_Communities": ['group_u', 'group_v',  'same_group'],
-        "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
+        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        #"Groupe_Communities": ['group_u', 'group_v',  'same_group'],
+        "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
-    
+
     if baseline=="CaseByCase" : 
         print("Custom SHAP baseline : case by case")
         baseline_map = {
             # Zéro pour la structure : 
             "cn": 0, "aa": 0, "pa": 0,  
             # Moyenne pour le continu :
-            "n2v_p2_q0.5_cosine": X_train["n2v_p2_q0.5_cosine"].mean(),
-            "n2v_p1_q1_cosine": X_train["n2v_p1_q1_cosine"].mean(),
-            "n2v_p2_q0.5_dist": X_train["n2v_p2_q0.5_dist"].mean(),
-            "n2v_p1_q1_dist": X_train["n2v_p1_q1_dist"].mean(),
+            "n2v_homophily_cos": X_train["n2v_homophily_cos"].mean(),
+            "n2v_homophily_dist": X_train["n2v_homophily_dist"].mean(),
+            "deepwalk_cos": X_train["deepwalk_cos"].mean(),
+            "deepwalk_dist": X_train["deepwalk_dist"].mean(),
             # Mode pour le catégoriel
             "community_u": X_train["community_u"].mode()[0] # Mode pour le catégoriel
         }
@@ -475,12 +503,12 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
         return model.predict_proba([x_mapped])[0][1]
 
     # Stockage des SHAP values finales
-    shap_values_coalition = np.zeros((len(X_test), n_groups))
+    shap_values_coalition = np.zeros((len(X_eval), n_groups))
 
     # 3. Boucle sur chaque échantillon (Sample)
     # --- Calcul des SHAP values ---
-    for idx in range(len(X_test)):
-        x_sample = X_test.iloc[idx]
+    for idx in range(len(X_eval)):
+        x_sample = X_eval.iloc[idx]
         
         for i in range(n_groups):
             phi_i = 0
@@ -508,7 +536,7 @@ def analyse_with_shap_custom(model, X_test, X_train, baseline="general", output_
 
     return pd.DataFrame(shap_values_coalition, columns=group_names)
 
-def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/plots"):
+def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, output_dir="outputs/plots",):
     """Calcule la distribution des rangs et génère le barplot du Top 5."""
     abs_shap = np.abs(shap_values)
     ranks = np.argsort(-abs_shap, axis=1)
@@ -523,15 +551,23 @@ def calculate_feature_rankings(shap_values, feature_names, output_dir="outputs/p
 
     df_ranks = pd.DataFrame(ranking_stats, index=[f"Rang {i+1}" for i in range(n_features)])
     
-    # Plot 3: Top 5 Appearance
-    top5 = df_ranks.iloc[0:5, :].sum(axis=0).sort_values(ascending=False)
-    plt.figure(figsize=(12, 7))
-    sns.barplot(x=top5.index, y=top5.values, palette="viridis")
-    plt.title("Importance structurelle : % de présence dans le Top 5 SHAP")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_dir, "shap_top5_frequency.png"))
-    plt.close()
+    if plot : 
+        top_k_displayed = df_ranks.iloc[0:top_k, :].sum(axis=0).sort_values(ascending=False)
+        
+        plt.figure(figsize=(12, 7))
+        
+        sns.barplot(
+            x=top_k_displayed.index, 
+            y=top_k_displayed.values, 
+            hue=top_k_displayed.index, 
+            palette="viridis", 
+            legend=False
+        )
+        
+        plt.title(f"Importance structurelle : % de présence dans le Top {top_k} SHAP")
+        plt.ylabel("% de présence")
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
     
     return df_ranks
 
@@ -551,21 +587,22 @@ def save_dataset(dataset, filename="dataset"):
 
     return output_path
 
-def load_dataset(filename="dataset"):
+def load_dataset(filename="dataset", talk = False):
     input_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
     input_path = os.path.join(input_dir, filename)
     
-    if not os.path.exists(input_path):
+    if not os.path.exists(input_path) :
         print(f"Erreur : Le fichier n'existe pas : {input_path}")
         return None
     
     dataset = pd.read_parquet(input_path)
-    print(f" Dataset chargé avec succès depuis : {input_path}")
-    print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
+    if talk :
+        print(f" Dataset chargé avec succès depuis : {input_path}")
+        print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
     
     return dataset
 
-def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
+def loadsave_data_joblib(data=None, filename="data.joblib", mode="save", talk=False):
     """
     Gère la sauvegarde et le chargement d'objets en .joblib (SHAP, XGBoost, etc.).
     """
@@ -573,7 +610,7 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
     target_path = base_path / "outputs" / "results" / filename
 
     if mode == "save":
-        if data is None:
+        if data is None :
             print("Erreur : Aucun objet fourni pour la sauvegarde.")
             return None
         
@@ -581,7 +618,8 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
         target_path.parent.mkdir(parents=True, exist_ok=True)
         
         joblib.dump(data, target_path, compress=3)
-        print(f"Objet sauvegardé dans : {target_path}")
+        if talk :
+            print(f"Objet sauvegardé dans : {target_path}")
         return target_path
 
     elif mode == "load":
@@ -589,49 +627,50 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
             raise FileNotFoundError(f"Fichier introuvable : {target_path}")
         
         obj = joblib.load(target_path)
-        print(f"Objet chargé avec succès depuis : {target_path}")
+        if talk :
+            print(f"Objet chargé avec succès depuis : {target_path}")
         
         return obj
 
-def load_all_data_for_graph(G_name):
+def load_all_data_for_graph(G_name, talk=False):
     # 1. G_train (avec structure, communautés et distances)
     try:
-        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{G_name}", mode="load")
+        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{G_name}", mode="load", talk = talk)
     except Exception:
         print(f"G_train introuvable pour {G_name}, création d'un graphe vide.")
         G_train = nx.Graph()
 
     # 2. Dataset de Train (via load_dataset)
     try:
-        dataset_train = load_dataset(filename=f"dataset_train_{G_name}")
+        dataset_train = load_dataset(filename=f"dataset_train_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset de Train introuvable pour {G_name}.")
         dataset_train = None
 
     # 3. Dataset d'Évaluation (via load_dataset)
     try:
-        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}")
+        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset d'Évaluation introuvable pour {G_name}.")
         dataset_eval = None
 
     # 4. Données XGBoost (Modèle, X_test, etc.)
     try:
-        xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load")
+        xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"Données XGBoost introuvables pour {G_name}.")
         xgboost_data = None
 
     # 5. SHAP Explainer
     try:
-        shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
+        shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"SHAP Explainer introuvable pour {G_name}.")
         shap_explainer = None
 
     # 6. SHAP Analysis
     try:
-        shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_analysis_{G_name}.joblib", mode="load")
+        shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_analysis_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"SHAP Analysis introuvable pour {G_name}.")
         shap_analysis = None
