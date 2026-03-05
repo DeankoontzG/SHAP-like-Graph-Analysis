@@ -560,21 +560,22 @@ def save_dataset(dataset, filename="dataset"):
 
     return output_path
 
-def load_dataset(filename="dataset"):
+def load_dataset(filename="dataset", talk = False):
     input_dir = os.path.join(PROJECT_ROOT, "outputs", "results")
     input_path = os.path.join(input_dir, filename)
     
-    if not os.path.exists(input_path):
+    if not os.path.exists(input_path) :
         print(f"Erreur : Le fichier n'existe pas : {input_path}")
         return None
     
     dataset = pd.read_parquet(input_path)
-    print(f" Dataset chargé avec succès depuis : {input_path}")
-    print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
+    if talk :
+        print(f" Dataset chargé avec succès depuis : {input_path}")
+        print(f" Taille : {dataset.shape[0]} lignes, {dataset.shape[1]} colonnes.")
     
     return dataset
 
-def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
+def loadsave_data_joblib(data=None, filename="data.joblib", mode="save", talk=False):
     """
     Gère la sauvegarde et le chargement d'objets en .joblib (SHAP, XGBoost, etc.).
     """
@@ -582,7 +583,7 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
     target_path = base_path / "outputs" / "results" / filename
 
     if mode == "save":
-        if data is None:
+        if data is None :
             print("Erreur : Aucun objet fourni pour la sauvegarde.")
             return None
         
@@ -590,7 +591,8 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
         target_path.parent.mkdir(parents=True, exist_ok=True)
         
         joblib.dump(data, target_path, compress=3)
-        print(f"Objet sauvegardé dans : {target_path}")
+        if talk :
+            print(f"Objet sauvegardé dans : {target_path}")
         return target_path
 
     elif mode == "load":
@@ -598,49 +600,50 @@ def loadsave_data_joblib(data=None, filename="data.joblib", mode="save"):
             raise FileNotFoundError(f"Fichier introuvable : {target_path}")
         
         obj = joblib.load(target_path)
-        print(f"Objet chargé avec succès depuis : {target_path}")
+        if talk :
+            print(f"Objet chargé avec succès depuis : {target_path}")
         
         return obj
 
-def load_all_data_for_graph(G_name):
+def load_all_data_for_graph(G_name, talk=False):
     # 1. G_train (avec structure, communautés et distances)
     try:
-        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{G_name}", mode="load")
+        G_train = loadsave_data_joblib(data=None, filename=f"G_train_w_struct_com_dist_{G_name}", mode="load", talk = talk)
     except Exception:
         print(f"G_train introuvable pour {G_name}, création d'un graphe vide.")
         G_train = nx.Graph()
 
     # 2. Dataset de Train (via load_dataset)
     try:
-        dataset_train = load_dataset(filename=f"dataset_train_{G_name}")
+        dataset_train = load_dataset(filename=f"dataset_train_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset de Train introuvable pour {G_name}.")
         dataset_train = None
 
     # 3. Dataset d'Évaluation (via load_dataset)
     try:
-        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}")
+        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset d'Évaluation introuvable pour {G_name}.")
         dataset_eval = None
 
     # 4. Données XGBoost (Modèle, X_test, etc.)
     try:
-        xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load")
+        xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"Données XGBoost introuvables pour {G_name}.")
         xgboost_data = None
 
     # 5. SHAP Explainer
     try:
-        shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
+        shap_explainer = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"SHAP Explainer introuvable pour {G_name}.")
         shap_explainer = None
 
     # 6. SHAP Analysis
     try:
-        shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_analysis_{G_name}.joblib", mode="load")
+        shap_analysis = loadsave_data_joblib(data=None, filename=f"shap_analysis_{G_name}.joblib", mode="load", talk = talk)
     except Exception:
         print(f"SHAP Analysis introuvable pour {G_name}.")
         shap_analysis = None
