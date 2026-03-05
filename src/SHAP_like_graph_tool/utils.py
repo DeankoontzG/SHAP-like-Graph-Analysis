@@ -370,6 +370,35 @@ EMBEDDING_MAPPING = {
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
 }
 
+def apply_fixed_log_binning(df, col_name, num_bins=10):
+    """
+    Découpe en bins par ordre de grandeur (log10 appliqué sur valeurs, puis découpe linéaire sur valeur)
+    """
+    epsilon = 1e-9
+    vals_log = np.log10(df[col_name] + epsilon)
+    
+    bins = np.linspace(vals_log.min(), vals_log.max(), num_bins + 1)
+    
+    df[f'{col_name}_log_bin'] = pd.cut(
+        vals_log, 
+        bins=bins, 
+        labels=False, 
+        include_lowest=True
+    )
+    return df
+
+def apply_quantile_binning(df, col_name, num_bins=10):
+    """
+    Découpe en bins contenant le même nombre d'observations (10% par bin).
+    """
+    df[f'{col_name}_quantile_bin'] = pd.qcut(
+        df[col_name], 
+        q=num_bins, 
+        labels=False, 
+        duplicates='drop'
+    )
+    return df
+
 def computeDistanceFeatures(G_train, embeddings="All"):
     to_run = EMBEDDINGS if embeddings == "All" else embeddings
     print("\n--- Enrichissement du Graphe avec les Embeddings ---")
