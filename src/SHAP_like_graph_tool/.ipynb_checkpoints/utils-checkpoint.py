@@ -7,6 +7,8 @@ import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.model_selection import KFold, train_test_split
 from node2vec import Node2Vec
 from infomap import Infomap
 import graph_tool.all as gt
@@ -17,6 +19,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
+from sklearn.model_selection import KFold, train_test_split
+from xgboost import XGBClassifier
+import optuna
 
 
 ###############################################################
@@ -98,7 +103,7 @@ def hide_graph_links(G, test_size = 0.15):
     return G_train, G_eval
 
 
-def _extract_pair_features(G_train, u, v):
+def _extract_pair_features(G_train, u, v, densities):
     """
     Aggrège les infos de noeuds (IDs de blocs, centralités) et 
     calcule les métriques de paires à la volée.
@@ -127,12 +132,14 @@ def _extract_pair_features(G_train, u, v):
         features[f'{metric}_u'] = nu.get(metric, 0)
         features[f'{metric}_v'] = nv.get(metric, 0)
 
+
     for algo in COMMUNITY_ALGOS:
         id_u = nu.get(f'{algo}_id')
         id_v = nv.get(f'{algo}_id')
-        features[f'{algo}_u'] = id_u
-        features[f'{algo}_v'] = id_v
-        features[f'same_{algo}'] = 1 if (id_u == id_v and id_u is not None) else 0
+        pair = tuple(sorted((id_u, id_v)))
+
+        features[f'{algo}_density'] = densities[algo].get(pair, 0)
+        features[f'same_{algo}'] = 1 if id_u == id_v else 0
 
     for emb in EMBEDDINGS:
         if emb in nu and emb in nv:
@@ -153,11 +160,12 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     nodes = list(G.nodes())
     n_pos = len(all_edges)
     data = []
+    densities = prepare_all_densities(G_train) # Calcul des densités inter blocs pour les commu
 
     print(f"Extraction des features pour {n_pos} liens positifs...")
     # --- 1. CLASSE POSITIVE ---
     for u, v in all_edges:
-        features = _extract_pair_features(G_train, u, v)
+        features = _extract_pair_features(G_train, u, v, densities)
         row = {'u': u, 'v': v, 'target': 1}
         row.update(features)
         data.append(row)
@@ -170,7 +178,7 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
         if u != v and not G.has_edge(u, v):
-            features = _extract_pair_features(G_train, u, v)
+            features = _extract_pair_features(G_train, u, v, densities)
             row = {'u': u, 'v': v, 'target': 0}
             row.update(features)
             data.append(row)
@@ -213,24 +221,26 @@ def _appendLouvainCommunities(G_train):
     _normalize_community_assignment(G_train, "louvain_id")
 
 def _appendInfomapCommunities(G_train):
-
     im = Infomap("--two-level --silent")
-
-    sample_node = list(G_train.nodes())[0]
-    node_type = type(sample_node)
+    
+    nodes_list = list(G_train.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes_list)}
+    idx_to_node = {i: node for i, node in enumerate(nodes_list)}
     
     for source, target in G_train.edges():
-        im.add_link(int(source), int(target))
+        im.add_link(node_to_idx[source], node_to_idx[target])
     
     im.run()
 
-    node_to_infomap = {
-        node_type(node.node_id): node.module_id 
-        for node in im.tree if node.is_leaf
-    }
+    node_to_infomap = {}
+    for node in im.tree:
+        if node.is_leaf:
+            original_node_name = idx_to_node[node.node_id]
+            node_to_infomap[original_node_name] = node.module_id
 
     nx.set_node_attributes(G_train, node_to_infomap, "infomap_id")
     _normalize_community_assignment(G_train, "infomap_id")
+
 
 def _appendGraphToolSBM(G_train):
     """
@@ -291,6 +301,45 @@ def computeCommunityFeatures(G_train, algos="All"):
             
     return G_train
 
+def prepare_all_densities(G_train):
+    """
+    Pré-calcule les densités de blocs pour tous les algorithmes.
+    """
+    all_densities = {}
+    
+    for algo in COMMUNITY_ALGOS:
+        attr_name = f"{algo}_id"
+        node_to_block = nx.get_node_attributes(G_train, attr_name)
+        
+        # 1. Compter les membres par bloc
+        block_sizes = pd.Series(node_to_block).value_counts().to_dict()
+        blocks = list(block_sizes.keys())
+        
+        # 2. Compter les liens réels entre blocs (uniquement sur le triangle supérieur)
+        counts = {(b1, b2): 0 for i, b1 in enumerate(blocks) for b2 in blocks[i:]}
+        
+        for u, v in G_train.edges():
+            bu, bv = node_to_block.get(u), node_to_block.get(v)
+            if bu is not None and bv is not None:
+                pair = tuple(sorted((bu, bv)))
+                if pair in counts:
+                    counts[pair] += 1
+        
+        # 3. Calculer les densités (Lien Réels / Liens Possibles)
+        algo_densities = {}
+        for (b1, b2), real_count in counts.items():
+            n1, n2 = block_sizes[b1], block_sizes[b2]
+            if b1 == b2:
+                possible = (n1 * (n1 - 1)) / 2  # Combinaisons intra
+            else:
+                possible = n1 * n2              # Combinaisons inter
+            
+            algo_densities[(b1, b2)] = real_count / possible if possible > 0 else 0
+            
+        all_densities[algo] = algo_densities
+        
+    return all_densities
+
 ### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
 
 def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
@@ -325,6 +374,35 @@ EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
 }
+
+def apply_fixed_log_binning(df, col_name, num_bins=10):
+    """
+    Découpe en bins par ordre de grandeur (log10 appliqué sur valeurs, puis découpe linéaire sur valeur)
+    """
+    epsilon = 1e-9
+    vals_log = np.log10(df[col_name] + epsilon)
+    
+    bins = np.linspace(vals_log.min(), vals_log.max(), num_bins + 1)
+    
+    df[f'{col_name}_log_bin'] = pd.cut(
+        vals_log, 
+        bins=bins, 
+        labels=False, 
+        include_lowest=True
+    )
+    return df
+
+def apply_quantile_binning(df, col_name, num_bins=10):
+    """
+    Découpe en bins contenant le même nombre d'observations (10% par bin).
+    """
+    df[f'{col_name}_quantile_bin'] = pd.qcut(
+        df[col_name], 
+        q=num_bins, 
+        labels=False, 
+        duplicates='drop'
+    )
+    return df
 
 def computeDistanceFeatures(G_train, embeddings="All"):
     to_run = EMBEDDINGS if embeddings == "All" else embeddings
@@ -365,12 +443,125 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 
     return df
 
+#################################################
+######### FONCTIONS DE CROSS VALIDATION #########
+#################################################
+
+def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50):
+    folds_data = _prepare_precalculated_folds(G_train, k=k)
+    
+    study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
+    
+    print("\n" + "="*90)
+    print(f"{'RÉSULTATS OPTUNA : TOP CONFIGURATIONS':^90}")
+    print("="*90)
+    
+    results = []
+    for trial in study.trials:
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            results.append({
+                'Trial': trial.number,
+                'Avg_AUC': trial.value,
+                'Std_AUC': trial.user_attrs.get('std_auc'),
+                'Avg_AP': trial.user_attrs.get('avg_ap'),
+                'Delta_AUC': trial.user_attrs.get('delta_auc'),
+                'Params': trial.params
+            })
+    
+    summary_df = pd.DataFrame(results).sort_values(by='Avg_AUC', ascending=False)
+
+    print(summary_df[['Trial', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AUC']].head(15).to_string(index=False))
+    
+    best_params = study.best_params.copy()
+    best_params.update({'tree_method': 'hist', 'n_estimators': 150})
+    
+    return best_params, summary_df
+
+def _prepare_precalculated_folds(G_train, k=1):
+    edges = list(G_train.edges())
+    if k == 1:
+        folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
+    else:
+        kf = KFold(n_splits=k, shuffle=True)
+        folds_idx = list(kf.split(edges))
+
+    precalculated_folds = []
+
+    for f_idx, (train_idx, val_idx) in enumerate(folds_idx):
+        print(f"--- Pré-calcul Fold {f_idx + 1} ---")
+        train_edges = [edges[i] for i in train_idx]
+        current_val_edges = [edges[i] for i in val_idx]
+        
+        G_fold_train = nx.Graph()
+        G_fold_train.add_nodes_from(G_train.nodes(data=True))
+        G_fold_train.add_edges_from(train_edges)
+
+        G_fold_val = nx.Graph()
+        G_fold_val.add_nodes_from(G_train.nodes(data=True))
+        G_fold_val.add_edges_from(current_val_edges)
+        
+        G_fold_train = computeStructureFeatures(G_fold_train)
+        G_fold_train = computeCommunityFeatures(G_fold_train)
+        G_fold_train = computeDistanceFeatures(G_fold_train)
+
+        ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
+        ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
+        
+        precalculated_folds.append((ds_train, ds_val))
+        
+    return precalculated_folds
+
+def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
+
+    if features_list is None or len(features_list) == 0:
+        exclude = ['u', 'v', 'target', 'label']
+        features = [col for col in precalculated_folds[0][0].columns if col not in exclude]
+        print(f"Features détectées ({len(features)}) : {features}")
+    else:
+        features = features_list
+
+    def objective(trial):
+        params = {
+            'n_estimators': 150,
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+            'max_depth': trial.suggest_int('max_depth', 3, 9),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 15),
+            'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+            'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True),
+            'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True),
+            'tree_method': 'hist',
+            'random_state': 42
+        }
+
+        f_auc_v, f_auc_t, f_ap_v = [], [], []
+
+        for ds_train, ds_val in precalculated_folds:
+            model = XGBClassifier(**params)
+            model.fit(ds_train[features], ds_train['target'])
+            
+            p_val = model.predict_proba(ds_val[features])[:, 1]
+            p_train = model.predict_proba(ds_train[features])[:, 1]
+            
+            f_auc_v.append(roc_auc_score(ds_val['target'], p_val))
+            f_auc_t.append(roc_auc_score(ds_train['target'], p_train))
+            f_ap_v.append(average_precision_score(ds_val['target'], p_val))
+        
+        avg_auc_v = np.mean(f_auc_v)
+        trial.set_user_attr("std_auc", np.std(f_auc_v))
+        trial.set_user_attr("avg_ap", np.mean(f_ap_v))
+        trial.set_user_attr("delta_auc", np.mean(f_auc_t) - avg_auc_v)
+
+        return avg_auc_v
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=n_trials)
+    
+    return study
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
 ########################################
-import shap
-import pandas as pd
 
 def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
     """
@@ -446,6 +637,7 @@ def analyse_with_shap_custom(model, X_eval, X_train, baseline="general", output_
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
         "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        #"Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
         #"Groupe_Communities": ['group_u', 'group_v',  'same_group'],
         "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }

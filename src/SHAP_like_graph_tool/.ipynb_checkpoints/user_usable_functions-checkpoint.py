@@ -2,132 +2,137 @@ from .utils import *
 from .models import *
 import matplotlib.pyplot as plt
 import numpy as np
-
-def execute(G, G_name) : 
+    
+def execute(G, G_name): 
     validate_input_graph(G)
 
     print("Validation du Graphe terminée. Lancement des calculs...")
     
-    #dataset = prepare_balanced_data_unknown_pos_and_community(G, test_size = 0.15, negative_ratio=10.0)
+    G_train, G_hidden = hide_graph_links(G, test_size=0.15)
+    loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode="save")
+
+    print("Lacement du k-fold cross validation...")
     
-    G_train, G_eval = hide_graph_links(G, test_size=0.15)
-    loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode= "save")
+    best_params, results_summary = k_fold_cross_validation(G_train, k=2, n_trials = 50)
+    print(best_params)
 
     G_train_with_structure = computeStructureFeatures(G_train)
     G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
     G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
-    loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode= "save")
+    loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
 
-    print("Sauvegarde du dataset ")
+    print("Sauvegarde du dataset")
     dataset_train = prepare_balanced_data(G_train, G_train)
-    dataset_eval = prepare_balanced_data(G_eval, G_train, negative_ratio = 50.0)
+    dataset_hidden = prepare_balanced_data(G_hidden, G_train, negative_ratio=50.0)
 
     print("Vérif : colonnes du dataset :")
     print(dataset_train.columns)
     save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
-    save_dataset(dataset=dataset_eval, filename=f"dataset_eval_{G_name}")
+    save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
 
     exclude = ['u', 'v', 'target', 'label'] 
     features = [col for col in dataset_train.columns if col not in exclude]
 
-    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features)
-    X_eval = dataset_eval[features] if features else dataset_eval.drop(["target", "u", "v", "label"], axis=1)
-    y_eval = dataset_eval['target']
-    results_eval = get_performance_metrics(model, X_eval, y_eval, "Eval_")
-    results_test_eval = pd.concat([results_test, results_eval])
+    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
+    
+    X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
+    y_hidden = dataset_hidden['target']
+    
+    results_hidden = get_performance_metrics(model, X_hidden, y_hidden, "Hidden_")
+    
+    results_test_hidden = pd.concat([results_test, results_hidden], axis=1)
 
     data_to_save = {
-        "results": results_test_eval,
+        "results": results_test_hidden,
         "model": model,
         "X_test": X_test,
         "X_train": X_train,
         "y_test": y_test,
         "y_train": y_train,
-        "X_eval": X_eval,
-        "y_eval": y_eval
+        "X_hidden": X_hidden,
+        "y_hidden": y_hidden,
+        "best_params": best_params
     }
 
-    print("Sauvegarde des données XGBoost (model,X1yTest et Train)")
-    loadsave_data_joblib(data=data_to_save,filename=f"xgboost_data_{G_name}.joblib", mode="save")
+    print("Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
+    loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name}.joblib", mode="save")
 
     print("\n RÉSULTATS")
-    print(results_test_eval.to_string(index=False))
+    print(results_test_hidden.to_string(index=False))
 
     print("\n Shapley va ! Lu.")
 
-    shap_explanation = analyze_with_shap(model, X_eval, y_eval)
+    shap_explanation = analyze_with_shap(model, X_hidden, y_hidden)
     print("Sauvegarde de l'analyse SHAP")
-    loadsave_data_joblib(data=shap_explanation, filename = f"shap_explainer_{G_name}.joblib", mode="save")
-    
-def evaluate(G_name, display=False):
-    shap_exp = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
+    loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name}.joblib", mode="save")
 
-    groupes = {
+def evaluate(G_name, display=False):
+    shap_base = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
+    xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load")
+    
+    group_mapping = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        #"Groupe_Communities": ['community_u', 'community_v', 'same_community', 'infomap_u', 'infomap_v', 'same_infomap'],
-        "Groupe_Communities": ['group_u', 'group_v',  'same_group '],
-        "Groupe_Embeddings": ['n2v_p2_q0.5_cosine', 'n2v_p2_q0.5_dist', 'n2v_p1_q1_cosine', 'n2v_p1_q1_dist']
+        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap', "louvain_u", "louvain_v", "same_louvain"],
+        "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
 
-    # --- CALCULS ---
-    group_indices = [
-        [shap_exp.feature_names.index(f) for f in features_du_groupe]
-        for features_du_groupe in groupes.values()
+    group_names = list(group_mapping.keys())
+
+    # --- ÉTAPE A & B : APPROCHES PAR SOMME (HEURISTIQUE) ---
+    group_col_indices = [
+        [shap_base.feature_names.index(f) for f in features]
+        for features in group_mapping.values()
     ]
 
-    new_shap_values = np.array([
-        shap_exp.values[:, indices].sum(axis=1) for indices in group_indices
-    ]).T
+    # Somme signée (conserve les directions positive/négative)
+    val_aggr_sum = np.array([shap_base.values[:, idxs].sum(axis=1) for idxs in group_col_indices]).T
+    # Somme des valeurs absolues (mesure l'effort total fourni dans le groupe)
+    val_aggr_abs = np.array([np.abs(shap_base.values[:, idxs]).sum(axis=1) for idxs in group_col_indices]).T
 
-    new_shap_values_abs = np.array([
-        np.abs(shap_exp.values[:, indices]).sum(axis=1) for indices in group_indices
-    ]).T
+    # Métriques de conflit interne (Contradiction)
+    # Mesure si les variables d'un même groupe s'annulent entre elles
+    conflict_ratio = (val_aggr_abs - np.abs(val_aggr_sum)) / (val_aggr_abs + 1e-10)
+    mean_conflict_ratios = np.mean(conflict_ratio, axis=0)
 
-    # Métriques de contradiction
-    contradiction_ratio = (new_shap_values_abs - np.abs(new_shap_values))/(new_shap_values_abs + 1e-10)
-    mean_contradiction_ratios = np.mean(contradiction_ratio, axis=0)
-
-    # Création des objets d'explication
-    new_exp = shap.Explanation(
-        values=new_shap_values,
-        base_values=shap_exp.base_values,
-        data=None, 
-        feature_names=list(groupes.keys())
+    # Création des objets Explanation pour l'approche Heuristique
+    exp_aggr_sum = shap.Explanation(
+        values=val_aggr_sum,
+        base_values=shap_base.base_values,
+        feature_names=group_names,
     )
 
-    new_exp_abs = shap.Explanation(
-        values=new_shap_values_abs,
-        base_values=shap_exp.base_values,
-        data=None, 
-        feature_names=list(groupes.keys())
+    exp_aggr_abs = shap.Explanation(
+        values=val_aggr_abs,
+        base_values=shap_base.base_values,
+        feature_names=group_names,
     )
 
-    # Analyse Custom
-    xgboost_data = loadsave_data_joblib(data=None, filename=f"xgboost_data_{G_name}.joblib", mode="load")
-    shap_custom = analyse_with_shap_custom(
+    # --- ÉTAPE C : APPROCHE PAR COALITION (RECALCUL EXACT) ---
+    # On recalcule les valeurs de Shapley en traitant les groupes comme des blocs atomiques
+    df_coalition_values = analyse_with_shap_custom(
         model=xgboost_data["model"], 
-        X_test=xgboost_data["X_test"], 
+        X_eval=xgboost_data["X_eval"], 
         X_train=xgboost_data["X_train"]
     )
     
-    group_names = list(shap_custom.columns)
-    exp_groups = shap.Explanation(
-        values=shap_custom.values,
-        base_values=np.array([0.5] * len(shap_custom)), 
-        data=None, 
-        feature_names=group_names
+    # Calcul de la vraie probabilité moyenne du modèle (Baseline)
+    train_baseline = xgboost_data["model"].predict_proba(xgboost_data["X_train"])[:, 1].mean()
+
+    exp_coalition_exact = shap.Explanation(
+        values=df_coalition_values.values,
+        base_values=np.array([train_baseline] * len(df_coalition_values)), 
+        feature_names=group_names,
     )
 
     # --- SAUVEGARDE ---
-    # On package tout ce qui est utile dans un dictionnaire
     results_to_save = {
         "G_name": G_name,
-        "groupes": groupes,
-        "mean_contradiction_ratios": mean_contradiction_ratios,
-        "shap_explanation_grouped": new_exp,
-        "shap_explanation_abs": new_exp_abs,
-        "shap_custom": shap_custom,
-        "exp_groups_custom": exp_groups
+        "group_mapping": group_mapping,
+        "mean_conflict_ratios": mean_conflict_ratios,
+        "exp_aggr_sum": exp_aggr_sum,
+        "exp_aggr_abs": exp_aggr_abs,
+        "df_coalition_values": df_coalition_values,
+        "exp_coalition_exact": exp_coalition_exact
     }
     
     loadsave_data_joblib(
@@ -136,23 +141,23 @@ def evaluate(G_name, display=False):
         mode="save"
     )
 
-    # --- AFFICHAGE CONDITIONNEL ---
+    # --- AFFICHAGE ---
     if display:
-        print(f"\nEvaluation avec SHAP par groupe pour {G_name}:")
+        print(f"\n=== Analyse SHAP par Groupes : {G_name} ===")
         
-        print("\n--- SHAP Bar Plot (Signed) ---")
-        shap.plots.bar(new_exp)
+        print("\n[1] Approche Somme (Heuristique) - Impact Directionnel")
+        shap.plots.bar(exp_aggr_sum)
         
-        print("\n--- SHAP Bar Plot (Absolute) ---")
-        shap.plots.bar(new_exp_abs)
+        print("\n[2] Approche Somme (Heuristique) - Importance Totale")
+        shap.plots.bar(exp_aggr_abs)
         
-        print("\n--- SHAP Custom Analysis ---")
-        shap.plots.bar(exp_groups)
+        print("\n[3] Approche Coalition (Exacte) - Prise en compte des interactions")
+        shap.plots.bar(exp_coalition_exact)
 
-        print(f"\n{'Catégorie':<25} | {'Contradiction Ratio':<20}")
+        print(f"\n{'Groupe':<25} | {'Conflict Ratio (Interne)':<20}")
         print("-" * 50)
-        for i, cat_name in enumerate(groupes.keys()):
-            print(f"{cat_name:<25} | {mean_contradiction_ratios[i]:.4f}")
+        for i, name in enumerate(group_names):
+            print(f"{name:<25} | {mean_conflict_ratios[i]:.4f}")
             
     return results_to_save
 

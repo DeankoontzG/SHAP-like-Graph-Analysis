@@ -6,8 +6,9 @@ import networkx as nx
 import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
-from sklearn.metrics.pairwise import cosine_similarity, 
-from sklearn.metrics import average_precision_score
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.model_selection import KFold, train_test_split
 from node2vec import Node2Vec
 from infomap import Infomap
 import graph_tool.all as gt
@@ -20,6 +21,7 @@ from pathlib import Path
 import json
 from sklearn.model_selection import KFold, train_test_split
 from xgboost import XGBClassifier
+import optuna
 
 
 ###############################################################
@@ -445,125 +447,121 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-import numpy as np
-import pandas as pd
-import networkx as nx
-from sklearn.model_selection import KFold, train_test_split
-from sklearn.metrics import roc_auc_score, average_precision_score
-from xgboost import XGBClassifier
-
-def k_fold_cross_validation(G_train, k=1, param_grid=None, features_list=None):
-    edges = list(G_train.edges())
-
-    if param_grid is None: 
-        param_grid = [
-            {'name': 'Baseline_Shallow', 'max_depth': 3, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_Mid', 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_Deep', 'max_depth': 6, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_minchild_low', 'min_child_weight': 1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_minchild_mid', 'min_child_weight': 5, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_minchild_high', 'min_child_weight': 10, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL1_low', 'reg_alpha': 0.1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL1_mid', 'reg_alpha': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL1_high', 'reg_alpha': 10.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL2_low', 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL2_mid', 'reg_lambda': 5.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_regL2_high', 'reg_lambda': 20.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_Elastic_Bal', 'reg_alpha': 0.5, 'reg_lambda': 2.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Baseline_Elastic_Agg', 'reg_alpha': 5.0, 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
-            {'name': 'Stochastic_Drop', 'subsample': 0.7, 'colsample_bytree': 0.7, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'}
-        ]
+def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50):
+    folds_data = _prepare_precalculated_folds(G_train, k=k)
     
-    if k == 1:
-        folds = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
-    else:
-        kf = KFold(n_splits=k, shuffle=True, random_state=42)
-        folds = list(kf.split(edges))
- 
-    param_results = {i: {'auc': [], 'ap': [], 'train_ap': []} for i in range(len(param_grid))}
+    study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
+    
+    print("\n" + "="*90)
+    print(f"{'RÉSULTATS OPTUNA : TOP CONFIGURATIONS':^90}")
+    print("="*90)
+    
+    results = []
+    for trial in study.trials:
+        if trial.state == optuna.trial.TrialState.COMPLETE:
+            results.append({
+                'Trial': trial.number,
+                'Avg_AUC': trial.value,
+                'Std_AUC': trial.user_attrs.get('std_auc'),
+                'Avg_AP': trial.user_attrs.get('avg_ap'),
+                'Delta_AUC': trial.user_attrs.get('delta_auc'),
+                'Params': trial.params
+            })
+    
+    summary_df = pd.DataFrame(results).sort_values(by='Avg_AUC', ascending=False)
 
-    # --- BOUCLE SUR LES FOLDS ---
-    for f_idx, (train_idx, val_idx) in enumerate(folds):
-        print(f"\n--- Processing Fold {f_idx + 1}/{max(k, 1)} ---")
-        
-        current_val_edges = [edges[i] for i in val_idx]
+    print(summary_df[['Trial', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AUC']].head(15).to_string(index=False))
+    
+    best_params = study.best_params.copy()
+    best_params.update({'tree_method': 'hist', 'n_estimators': 150})
+    
+    return best_params, summary_df
+
+def _prepare_precalculated_folds(G_train, k=1):
+    edges = list(G_train.edges())
+    if k == 1:
+        folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
+    else:
+        kf = KFold(n_splits=k, shuffle=True)
+        folds_idx = list(kf.split(edges))
+
+    precalculated_folds = []
+
+    for f_idx, (train_idx, val_idx) in enumerate(folds_idx):
+        print(f"--- Pré-calcul Fold {f_idx + 1} ---")
         train_edges = [edges[i] for i in train_idx]
+        current_val_edges = [edges[i] for i in val_idx]
         
         G_fold_train = nx.Graph()
         G_fold_train.add_nodes_from(G_train.nodes(data=True))
         G_fold_train.add_edges_from(train_edges)
+
+        G_fold_val = nx.Graph()
+        G_fold_val.add_nodes_from(G_train.nodes(data=True))
+        G_fold_val.add_edges_from(current_val_edges)
         
         G_fold_train = computeStructureFeatures(G_fold_train)
         G_fold_train = computeCommunityFeatures(G_fold_train)
         G_fold_train = computeDistanceFeatures(G_fold_train)
 
         ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-        ds_val = prepare_balanced_data(current_val_edges, G_fold_train, negative_ratio=25.0)
+        ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
+        
+        precalculated_folds.append((ds_train, ds_val))
+        
+    return precalculated_folds
 
-        if features_list is None or len(features_list) == 0:
-            exclude = ['u', 'v', 'target', 'label']
-            current_features = [col for col in ds_train.columns if col not in exclude]
-            if f_idx == 0: print(f"Features détectées ({len(current_features)}) : {current_features}")
-        else:
-            current_features = features_list
-        
-        # --- BOUCLE SUR LES PARAMÈTRES ---
-        for i, params in enumerate(param_grid):
-            fit_params = params.copy()
-            config_name = fit_params.pop('name', f"Config_{i}")
-            
-            model = XGBClassifier(**fit_params)
-            model.fit(ds_train[current_features], ds_train['target'])
-            
-            y_probs_val = model.predict_proba(ds_val[current_features])[:, 1]
-            y_probs_train = model.predict_proba(ds_train[current_features])[:, 1]
-            
-            auc_val = roc_auc_score(ds_val['target'], y_probs_val)
-            ap_val = average_precision_score(ds_val['target'], y_probs_val)
-            ap_train = average_precision_score(ds_train['target'], y_probs_train)
-            
-            param_results[i]['auc'].append(auc_val)
-            param_results[i]['ap'].append(ap_val)
-            param_results[i]['train_ap'].append(ap_train)
-            
-            print(f"[{config_name}] AUC: {auc_val:.4f} | AP: {ap_val:.4f} | Delta_AP: {ap_train - ap_val:.4f}")
+def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
 
-    # --- SYNTHÈSE ET CLASSEMENT ---
-    results_summary = []
-    for i, params in enumerate(param_grid):
-        res = param_results[i]
-        avg_auc = np.mean(res['auc'])
-        std_auc = np.std(res['auc'])
-        avg_ap = np.mean(res['ap'])
-        avg_train_ap = np.mean(res['train_ap'])
-        delta_ap = avg_train_ap - avg_ap
+    if features_list is None or len(features_list) == 0:
+        exclude = ['u', 'v', 'target', 'label']
+        features = [col for col in precalculated_folds[0][0].columns if col not in exclude]
+        print(f"Features détectées ({len(features)}) : {features}")
+    else:
+        features = features_list
+
+    def objective(trial):
+        params = {
+            'n_estimators': 150,
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+            'max_depth': trial.suggest_int('max_depth', 3, 9),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 15),
+            'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+            'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+            'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True),
+            'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True),
+            'tree_method': 'hist',
+            'random_state': 42
+        }
+
+        f_auc_v, f_auc_t, f_ap_v = [], [], []
+
+        for ds_train, ds_val in precalculated_folds:
+            model = XGBClassifier(**params)
+            model.fit(ds_train[features], ds_train['target'])
+            
+            p_val = model.predict_proba(ds_val[features])[:, 1]
+            p_train = model.predict_proba(ds_train[features])[:, 1]
+            
+            f_auc_v.append(roc_auc_score(ds_val['target'], p_val))
+            f_auc_t.append(roc_auc_score(ds_train['target'], p_train))
+            f_ap_v.append(average_precision_score(ds_val['target'], p_val))
         
-        results_summary.append({
-            'Config': params.get('name', f"Config_{i}"),
-            'Avg_AUC': avg_auc,
-            'Std_AUC': std_auc,
-            'Avg_AP': avg_ap,
-            'Delta_AP': delta_ap,
-            'raw_params': params
-        })
-        
-    summary_df = pd.DataFrame(results_summary).sort_values(by='Avg_AUC', ascending=False)
+        avg_auc_v = np.mean(f_auc_v)
+        trial.set_user_attr("std_auc", np.std(f_auc_v))
+        trial.set_user_attr("avg_ap", np.mean(f_ap_v))
+        trial.set_user_attr("delta_auc", np.mean(f_auc_t) - avg_auc_v)
+
+        return avg_auc_v
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=n_trials)
     
-    print("\n" + "="*80)
-    print(f"{'CLASSEMENT DES HYPER-PARAMÈTRES (Trier par AUC)':^80}")
-    print("="*80)
-    print(summary_df[['Config', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AP']].to_string(index=False))
-
-    best_config_raw = summary_df.iloc[0]['raw_params'].copy()
-    best_config_raw.pop('name', None)
-    
-    return best_config_raw, results_summary
+    return study
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############
 ########################################
-import shap
-import pandas as pd
 
 def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
     """
