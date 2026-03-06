@@ -13,7 +13,7 @@ def execute(G, G_name):
 
     print("Lacement du k-fold cross validation...")
     
-    best_params, results_summary = k_fold_cross_validation(G_train, k=2, n_trials = 50)
+    best_params, results_summary = k_fold_cross_validation(G_train, k=1, features_list=None, n_trials=50, graph_name= G_name)
     print(best_params)
 
     G_train_with_structure = computeStructureFeatures(G_train)
