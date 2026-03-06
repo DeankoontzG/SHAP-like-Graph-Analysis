@@ -6,7 +6,8 @@ import networkx as nx
 import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
-from sklearn.metrics.pairwise import cosine_similarity, average_precision_score
+from sklearn.metrics.pairwise import cosine_similarity, 
+from sklearn.metrics import average_precision_score
 from node2vec import Node2Vec
 from infomap import Infomap
 import graph_tool.all as gt
@@ -444,19 +445,46 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
+import numpy as np
+import pandas as pd
+import networkx as nx
+from sklearn.model_selection import KFold, train_test_split
+from sklearn.metrics import roc_auc_score, average_precision_score
+from xgboost import XGBClassifier
+
 def k_fold_cross_validation(G_train, k=1, param_grid=None, features_list=None):
     edges = list(G_train.edges())
+
+    if param_grid is None: 
+        param_grid = [
+            {'name': 'Baseline_Shallow', 'max_depth': 3, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_Mid', 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_Deep', 'max_depth': 6, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_minchild_low', 'min_child_weight': 1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_minchild_mid', 'min_child_weight': 5, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_minchild_high', 'min_child_weight': 10, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL1_low', 'reg_alpha': 0.1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL1_mid', 'reg_alpha': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL1_high', 'reg_alpha': 10.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL2_low', 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL2_mid', 'reg_lambda': 5.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_regL2_high', 'reg_lambda': 20.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_Elastic_Bal', 'reg_alpha': 0.5, 'reg_lambda': 2.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Baseline_Elastic_Agg', 'reg_alpha': 5.0, 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+            {'name': 'Stochastic_Drop', 'subsample': 0.7, 'colsample_bytree': 0.7, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'}
+        ]
     
     if k == 1:
         folds = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
     else:
         kf = KFold(n_splits=k, shuffle=True, random_state=42)
         folds = list(kf.split(edges))
+ 
+    param_results = {i: {'auc': [], 'ap': [], 'train_ap': []} for i in range(len(param_grid))}
 
-    param_scores = {i: [] for i in range(len(param_grid))}
-
-    for train_idx, val_idx in folds:
-        print(f"\n--- Processing Fold ---")
+    # --- BOUCLE SUR LES FOLDS ---
+    for f_idx, (train_idx, val_idx) in enumerate(folds):
+        print(f"\n--- Processing Fold {f_idx + 1}/{max(k, 1)} ---")
         
         current_val_edges = [edges[i] for i in val_idx]
         train_edges = [edges[i] for i in train_idx]
@@ -468,34 +496,68 @@ def k_fold_cross_validation(G_train, k=1, param_grid=None, features_list=None):
         G_fold_train = computeStructureFeatures(G_fold_train)
         G_fold_train = computeCommunityFeatures(G_fold_train)
         G_fold_train = computeDistanceFeatures(G_fold_train)
-        
 
         ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-        
         ds_val = prepare_balanced_data(current_val_edges, G_fold_train, negative_ratio=25.0)
+
+        if features_list is None or len(features_list) == 0:
+            exclude = ['u', 'v', 'target', 'label']
+            current_features = [col for col in ds_train.columns if col not in exclude]
+            if f_idx == 0: print(f"Features détectées ({len(current_features)}) : {current_features}")
+        else:
+            current_features = features_list
         
+        # --- BOUCLE SUR LES PARAMÈTRES ---
         for i, params in enumerate(param_grid):
-            model = XGBClassifier(**params)
-            model.fit(ds_train[features_list], ds_train['target'])
+            fit_params = params.copy()
+            config_name = fit_params.pop('name', f"Config_{i}")
             
-            y_probs = model.predict_proba(ds_val[features_list])[:, 1]
-            score = average_precision_score(ds_val['target'], y_probs)
+            model = XGBClassifier(**fit_params)
+            model.fit(ds_train[current_features], ds_train['target'])
             
-            param_scores[i].append(score)
-            print(f"Params index {i} - Fold Score: {score:.4f}")
+            y_probs_val = model.predict_proba(ds_val[current_features])[:, 1]
+            y_probs_train = model.predict_proba(ds_train[current_features])[:, 1]
+            
+            auc_val = roc_auc_score(ds_val['target'], y_probs_val)
+            ap_val = average_precision_score(ds_val['target'], y_probs_val)
+            ap_train = average_precision_score(ds_train['target'], y_probs_train)
+            
+            param_results[i]['auc'].append(auc_val)
+            param_results[i]['ap'].append(ap_val)
+            param_results[i]['train_ap'].append(ap_train)
+            
+            print(f"[{config_name}] AUC: {auc_val:.4f} | AP: {ap_val:.4f} | Delta_AP: {ap_train - ap_val:.4f}")
 
-    best_avg_score = -1
-    best_params = None
-
+    # --- SYNTHÈSE ET CLASSEMENT ---
+    results_summary = []
     for i, params in enumerate(param_grid):
-        avg_score = np.mean(param_scores[i])
-        print(f"\nFinal Avg AP for {params}: {avg_score:.4f}")
+        res = param_results[i]
+        avg_auc = np.mean(res['auc'])
+        std_auc = np.std(res['auc'])
+        avg_ap = np.mean(res['ap'])
+        avg_train_ap = np.mean(res['train_ap'])
+        delta_ap = avg_train_ap - avg_ap
         
-        if avg_score > best_avg_score:
-            best_avg_score = avg_score
-            best_params = params
+        results_summary.append({
+            'Config': params.get('name', f"Config_{i}"),
+            'Avg_AUC': avg_auc,
+            'Std_AUC': std_auc,
+            'Avg_AP': avg_ap,
+            'Delta_AP': delta_ap,
+            'raw_params': params
+        })
+        
+    summary_df = pd.DataFrame(results_summary).sort_values(by='Avg_AUC', ascending=False)
+    
+    print("\n" + "="*80)
+    print(f"{'CLASSEMENT DES HYPER-PARAMÈTRES (Trier par AUC)':^80}")
+    print("="*80)
+    print(summary_df[['Config', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AP']].to_string(index=False))
 
-    return best_params
+    best_config_raw = summary_df.iloc[0]['raw_params'].copy()
+    best_config_raw.pop('name', None)
+    
+    return best_config_raw, results_summary
 
 ########################################
 # FONCTIONS D'APPEL DE SHAP ############

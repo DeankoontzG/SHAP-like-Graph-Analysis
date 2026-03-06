@@ -12,16 +12,24 @@ import seaborn as sns
 import os
 
 
-def train_and_test_xgboost(dataFrame, features=None, plot=False, max_depth=6, learning_rate=0.1, min_child_weight=10, nb_estimators=100):
+def train_and_test_xgboost(dataFrame, features=None, parameters=None, plot=False):
     X = dataFrame[features] if features else dataFrame.drop(["target", "u", "v", "label"], axis=1)
     y = dataFrame['target']
     
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=123)
             
-    model = XGBClassifier(
-        nb_estimators=nb_estimators, learning_rate=learning_rate, max_depth=max_depth,
-        min_child_weight=min_child_weight, objective='binary:logistic', tree_method='hist', n_jobs=1
-    )
+    if parameters is None:
+        parameters = {
+            'n_estimators': 100,
+            'learning_rate': 0.1,
+            'max_depth': 6,
+            'min_child_weight': 5,
+            'objective': 'binary:logistic',
+            'tree_method': 'hist',
+            'random_state': 42,
+            'n_jobs': -1 # Utilise tous les cœurs pour aller plus vite
+        }
+    model = XGBClassifier(**parameters)
     model.fit(X_train, y_train)
     
     test_stats = get_performance_metrics(model, X_test, y_test, prefix="Test_")

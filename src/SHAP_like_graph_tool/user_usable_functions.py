@@ -11,6 +11,39 @@ def execute(G, G_name):
     G_train, G_hidden = hide_graph_links(G, test_size=0.15)
     loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode="save")
 
+    print("Lacement du k-fold cross validation...")
+    param_grid = [
+        # --- MAX_DEPTH VARIATIONS ---
+        {'name': 'Baseline_Shallow', 'max_depth': 3, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_Mid', 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_Deep', 'max_depth': 6, 'learning_rate': 0.05, 'tree_method': 'hist'},
+
+        # --- MIN_CHILD_WEIGHT VARIATIONS ---
+        {'name': 'Baseline_minchild_low', 'min_child_weight': 1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_minchild_mid', 'min_child_weight': 5, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_minchild_high', 'min_child_weight': 10, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+
+        # --- REG_ALPHA (L1) VARIATIONS ---
+        {'name': 'Baseline_regL1_low', 'reg_alpha': 0.1, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_regL1_mid', 'reg_alpha': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_regL1_high', 'reg_alpha': 10.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+
+        # --- REG_LAMBDA (L2) VARIATIONS ---
+        {'name': 'Baseline_regL2_low', 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_regL2_mid', 'reg_lambda': 5.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_regL2_high', 'reg_lambda': 20.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+
+        # --- ELASTIC NET (L1 + L2) ---
+        {'name': 'Baseline_Elastic_Bal', 'reg_alpha': 0.5, 'reg_lambda': 2.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'},
+        {'name': 'Baseline_Elastic_Agg', 'reg_alpha': 5.0, 'reg_lambda': 1.0, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'}
+    
+        # Stochastic drop test
+        {'name': 'Stochastic_Drop', 'subsample': 0.7, 'colsample_bytree': 0.7, 'max_depth': 4, 'learning_rate': 0.05, 'tree_method': 'hist'}
+    ]
+    
+    best_params, results_summary = k_fold_cross_validation(G_train, k=2, param_grid=param_grid)
+    print(best_params)
+
     G_train_with_structure = computeStructureFeatures(G_train)
     G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
     G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
@@ -28,7 +61,7 @@ def execute(G, G_name):
     exclude = ['u', 'v', 'target', 'label'] 
     features = [col for col in dataset_train.columns if col not in exclude]
 
-    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features)
+    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
     
     X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
     y_hidden = dataset_hidden['target']
@@ -45,7 +78,8 @@ def execute(G, G_name):
         "y_test": y_test,
         "y_train": y_train,
         "X_hidden": X_hidden,
-        "y_hidden": y_hidden
+        "y_hidden": y_hidden,
+        "best_params": best_params
     }
 
     print("Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
