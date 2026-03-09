@@ -855,10 +855,10 @@ def load_all_data_for_graph(G_name, talk=False):
 
     # 3. Dataset d'Évaluation (via load_dataset)
     try:
-        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}", talk = talk)
+        dataset_hidden = load_dataset(filename=f"dataset_hidden_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset d'Évaluation introuvable pour {G_name}.")
-        dataset_eval = None
+        dataset_hidden = None
 
     # 4. Données XGBoost (Modèle, X_test, etc.)
     try:
@@ -881,7 +881,7 @@ def load_all_data_for_graph(G_name, talk=False):
         print(f"SHAP Analysis introuvable pour {G_name}.")
         shap_analysis = None
 
-    return G_train, dataset_train, dataset_eval, xgboost_data, shap_explainer, shap_analysis
+    return G_train, dataset_train, dataset_hidden, xgboost_data, shap_explainer, shap_analysis
 
 class GraphEncoder(json.JSONEncoder):
     def default(self, obj):
