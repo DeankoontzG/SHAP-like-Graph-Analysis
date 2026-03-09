@@ -447,14 +447,9 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50):
+def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
     folds_data = _prepare_precalculated_folds(G_train, k=k)
-    
     study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
-    
-    print("\n" + "="*90)
-    print(f"{'RÉSULTATS OPTUNA : TOP CONFIGURATIONS':^90}")
-    print("="*90)
     
     results = []
     for trial in study.trials:
@@ -470,8 +465,23 @@ def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50):
     
     summary_df = pd.DataFrame(results).sort_values(by='Avg_AUC', ascending=False)
 
-    print(summary_df[['Trial', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AUC']].head(15).to_string(index=False))
-    
+    print("\n" + "="*80)
+    print(f"{'RÉSULTATS OPTUNA : BASELINE VS TOP CONFIGURATIONS':^80}")
+    print("="*80)
+
+    cols = ['Trial', 'Avg_AUC', 'Std_AUC', 'Avg_AP', 'Delta_AUC']
+    print(summary_df[summary_df['Trial'] == 0][cols].to_string(index=False))
+    print("-" * 80)
+    print(summary_df.head(10)[cols].to_string(index=False))
+    print("="*80)
+
+    save_dir = "outputs/results"
+    os.makedirs(save_dir, exist_ok=True)
+    filename = f"optuna_results_{graph_name}.csv"
+    full_path = os.path.join(save_dir, filename)
+    summary_df.to_csv(full_path, index=False)
+    print(f"Résultats sauvegardés dans : {full_path}")
+
     best_params = study.best_params.copy()
     best_params.update({'tree_method': 'hist', 'n_estimators': 150})
     
@@ -555,6 +565,10 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
         return avg_auc_v
 
     study = optuna.create_study(direction='maximize')
+    baseline = {'learning_rate': 0.1, 'max_depth': 6, 'min_child_weight': 6,
+        'subsample': 1.0, 'colsample_bytree': 1.0, 'reg_alpha': 1e-3, 'reg_lambda': 1.0
+    }
+    study.enqueue_trial(baseline)
     study.optimize(objective, n_trials=n_trials)
     
     return study
@@ -841,10 +855,10 @@ def load_all_data_for_graph(G_name, talk=False):
 
     # 3. Dataset d'Évaluation (via load_dataset)
     try:
-        dataset_eval = load_dataset(filename=f"dataset_eval_{G_name}", talk = talk)
+        dataset_hidden = load_dataset(filename=f"dataset_hidden_{G_name}", talk = talk)
     except Exception:
         print(f"Dataset d'Évaluation introuvable pour {G_name}.")
-        dataset_eval = None
+        dataset_hidden = None
 
     # 4. Données XGBoost (Modèle, X_test, etc.)
     try:
@@ -867,7 +881,7 @@ def load_all_data_for_graph(G_name, talk=False):
         print(f"SHAP Analysis introuvable pour {G_name}.")
         shap_analysis = None
 
-    return G_train, dataset_train, dataset_eval, xgboost_data, shap_explainer, shap_analysis
+    return G_train, dataset_train, dataset_hidden, xgboost_data, shap_explainer, shap_analysis
 
 class GraphEncoder(json.JSONEncoder):
     def default(self, obj):
