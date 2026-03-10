@@ -491,38 +491,43 @@ def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph
     
     return best_params, summary_df
 
-def _prepare_precalculated_folds(G_train, k=1):
+def _process_single_fold(f_idx, train_idx, val_idx, edges, G_train_nodes_data):
+    print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
+    train_edges = [edges[i] for i in train_idx]
+    val_edges = [edges[i] for i in val_idx]
+    
+    G_fold_train = nx.Graph()
+    G_fold_train.add_nodes_from(G_train_nodes_data)
+    G_fold_train.add_edges_from(train_edges)
+
+    G_fold_val = nx.Graph()
+    G_fold_val.add_nodes_from(G_train_nodes_data)
+    G_fold_val.add_edges_from(val_edges)
+    
+    G_fold_train = computeStructureFeatures(G_fold_train)
+    G_fold_train = computeCommunityFeatures(G_fold_train)
+    G_fold_train = computeDistanceFeatures(G_fold_train)
+
+    ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
+    ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
+    
+    return (ds_train, ds_val)
+
+def _prepare_precalculated_folds(G_train, k=1, n_jobs=-1):
     edges = list(G_train.edges())
+    nodes_data = list(G_train.nodes(data=True)) 
     if k == 1:
         folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
     else:
         kf = KFold(n_splits=k, shuffle=True)
         folds_idx = list(kf.split(edges))
 
-    precalculated_folds = []
-
-    for f_idx, (train_idx, val_idx) in enumerate(folds_idx):
-        print(f"--- Pré-calcul Fold {f_idx + 1} ---")
-        train_edges = [edges[i] for i in train_idx]
-        current_val_edges = [edges[i] for i in val_idx]
-        
-        G_fold_train = nx.Graph()
-        G_fold_train.add_nodes_from(G_train.nodes(data=True))
-        G_fold_train.add_edges_from(train_edges)
-
-        G_fold_val = nx.Graph()
-        G_fold_val.add_nodes_from(G_train.nodes(data=True))
-        G_fold_val.add_edges_from(current_val_edges)
-        
-        G_fold_train = computeStructureFeatures(G_fold_train)
-        G_fold_train = computeCommunityFeatures(G_fold_train)
-        G_fold_train = computeDistanceFeatures(G_fold_train)
-
-        ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-        ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
-        
-        precalculated_folds.append((ds_train, ds_val))
-        
+    # On lance tous les folds en même temps
+    precalculated_folds = Parallel(n_jobs=n_jobs)(
+        delayed(_process_single_fold)(i, t_idx, v_idx, edges, nodes_data)
+        for i, (t_idx, v_idx) in enumerate(folds_idx)
+    )
+    
     return precalculated_folds
 
 def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
