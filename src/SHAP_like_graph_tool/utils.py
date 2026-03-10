@@ -15,6 +15,7 @@ import graph_tool.all as gt
 import shap
 import os
 import joblib
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
@@ -150,7 +151,14 @@ def _extract_pair_features(G_train, u, v, densities):
 
     return features
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
+def _worker_extract(u, v, target, G_train, densities):
+    """
+    Fonction isolée pour un processus : extrait les features d'une paire unique.
+    """
+    features = _extract_pair_features(G_train, u, v, densities)
+    return {'u': u, 'v': v, 'target': target, **features}
+
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
@@ -159,34 +167,30 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     all_edges = list(G.edges())
     nodes = list(G.nodes())
     n_pos = len(all_edges)
-    data = []
-    densities = prepare_all_densities(G_train) # Calcul des densités inter blocs pour les commu
+    densities = prepare_all_densities(G_train)
 
-    print(f"Extraction des features pour {n_pos} liens positifs...")
-    # --- 1. CLASSE POSITIVE ---
-    for u, v in all_edges:
-        features = _extract_pair_features(G_train, u, v, densities)
-        row = {'u': u, 'v': v, 'target': 1}
-        row.update(features)
-        data.append(row)
+    print(f"Préparation des listes de paires...")
+    tasks = [(u, v, 1) for u, v in all_edges]
     
-    # --- 2. CLASSE NÉGATIVE ---
     n_neg_target = int(n_pos * negative_ratio)
-    print(f"Génération de {n_neg_target} non-liens (ratio {negative_ratio})...")
-    
     neg_count = 0
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
         if u != v and not G.has_edge(u, v):
-            features = _extract_pair_features(G_train, u, v, densities)
-            row = {'u': u, 'v': v, 'target': 0}
-            row.update(features)
-            data.append(row)
+            tasks.append((u, v, 0))
             neg_count += 1
 
-    df = pd.DataFrame(data)
+    print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_worker_extract)(u, v, target, G_train, densities) 
+        for u, v, target in tasks
+    )
+
+    df = pd.DataFrame(results)
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
+
 
 ### Fonction de calcul de features de structure des noeuds
 def computeStructureFeatures(G_train):
