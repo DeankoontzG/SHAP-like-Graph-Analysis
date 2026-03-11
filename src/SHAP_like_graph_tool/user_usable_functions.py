@@ -3,68 +3,75 @@ from .models import *
 import matplotlib.pyplot as plt
 import numpy as np
     
-def execute(G, G_name): 
-    validate_input_graph(G)
+def execute(G, G_name, steps= ["prep", "shap"]): 
 
-    print("Validation du Graphe terminée. Lancement des calculs...")
+    if 'prep' in steps:
+        validate_input_graph(G)
+        print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
+        
+        G_train, G_hidden = hide_graph_links(G, test_size=0.15)
+        loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode="save")
     
-    G_train, G_hidden = hide_graph_links(G, test_size=0.15)
-    loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode="save")
-
-    print("Lacement du k-fold cross validation...")
+        print("Lacement du k-fold cross validation...")
+        best_params, results_summary = k_fold_cross_validation(G_train, k=1, features_list=None, n_trials=50, graph_name= G_name)
+        print(best_params)
     
-    best_params, results_summary = k_fold_cross_validation(G_train, k=1, features_list=None, n_trials=50, graph_name= G_name)
-    print(best_params)
-
-    G_train_with_structure = computeStructureFeatures(G_train)
-    G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
-    G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
-    loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
-
-    print("Sauvegarde du dataset")
-    dataset_train = prepare_balanced_data(G_train, G_train)
-    dataset_hidden = prepare_balanced_data(G_hidden, G_train, negative_ratio=50.0)
-
-    print("Vérif : colonnes du dataset :")
-    print(dataset_train.columns)
-    save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
-    save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
-
-    exclude = ['u', 'v', 'target', 'label'] 
-    features = [col for col in dataset_train.columns if col not in exclude]
-
-    results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
+        G_train_with_structure = computeStructureFeatures(G_train)
+        G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
+        G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
+        print("Sauvegarde du dataset")
+        loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
     
-    X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
-    y_hidden = dataset_hidden['target']
+        dataset_train = prepare_balanced_data(G_train, G_train)
+        dataset_hidden = prepare_balanced_data(G_hidden, G_train, negative_ratio=50.0)
     
-    results_hidden = get_performance_metrics(model, X_hidden, y_hidden, "Hidden_")
+        print("Vérif : colonnes du dataset :")
+        print(dataset_train.columns)
+        save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
+        save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
-    results_test_hidden = pd.concat([results_test, results_hidden], axis=1)
+        exclude = ['u', 'v', 'target', 'label'] 
+        features = [col for col in dataset_train.columns if col not in exclude]
+    
+        results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
+        
+        X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
+        y_hidden = dataset_hidden['target']
+        
+        results_hidden = get_performance_metrics(model, X_hidden, y_hidden, "Hidden_")
+        results_test_hidden = pd.concat([results_test, results_hidden], axis=1)
+    
+        data_to_save = {
+            "results": results_test_hidden,
+            "model": model,
+            "X_test": X_test,
+            "X_train": X_train,
+            "y_test": y_test,
+            "y_train": y_train,
+            "X_hidden": X_hidden,
+            "y_hidden": y_hidden,
+            "best_params": best_params
+        }
+    
+        print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
+        loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name}.joblib", mode="save")
+    
+        print("\n RÉSULTATS")
+        print(results_test_hidden.to_string(index=False))
 
-    data_to_save = {
-        "results": results_test_hidden,
-        "model": model,
-        "X_test": X_test,
-        "X_train": X_train,
-        "y_test": y_test,
-        "y_train": y_train,
-        "X_hidden": X_hidden,
-        "y_hidden": y_hidden,
-        "best_params": best_params
-    }
+    if 'shap' in steps:
+        print("\n [SHAP] Shapley va ! Lu.")
+    
+        if 'prep' not in steps:
+            print(f" Chargement des données pré-calculées...")
+            data = loadsave_data_joblib(filename=f"xgboost_data_{G_name}.joblib", mode="load")
+            model = data['model']
+            X_hidden = data['X_hidden']
+            y_hidden = data['y_hidden']
 
-    print("Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
-    loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name}.joblib", mode="save")
-
-    print("\n RÉSULTATS")
-    print(results_test_hidden.to_string(index=False))
-
-    print("\n Shapley va ! Lu.")
-
-    shap_explanation = analyze_with_shap(model, X_hidden, y_hidden)
-    print("Sauvegarde de l'analyse SHAP")
-    loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name}.joblib", mode="save")
+        shap_explanation = analyze_with_shap(model, X_hidden, y_hidden)
+        print("Sauvegarde de l'analyse SHAP")
+        loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name}.joblib", mode="save")
 
 def evaluate(G_name, display=False):
     shap_base = loadsave_data_joblib(data=None, filename=f"shap_explainer_{G_name}.joblib", mode="load")
