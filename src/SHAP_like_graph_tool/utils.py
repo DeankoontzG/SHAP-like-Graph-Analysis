@@ -176,7 +176,7 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
     neg_count = 0
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
-        if u != v and not G.has_edge(u, v):
+        if u != v and not G.has_edge(u, v) and not G_train.has_edge(u, v):
             tasks.append((u, v, 0))
             neg_count += 1
 
@@ -451,8 +451,9 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
-    folds_data = _prepare_precalculated_folds(G_train, k=k)
+def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
+    
+    folds_data = _prepare_precalculated_folds(G, k=k)
     study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
     
     results = []
@@ -491,40 +492,55 @@ def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph
     
     return best_params, summary_df
 
-def _process_single_fold(f_idx, train_idx, val_idx, edges, G_train_nodes_data):
+def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data):
     print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
-    train_edges = [edges[i] for i in train_idx]
-    val_edges = [edges[i] for i in val_idx]
-    
-    G_fold_train = nx.Graph()
-    G_fold_train.add_nodes_from(G_train_nodes_data)
-    G_fold_train.add_edges_from(train_edges)
+    # Construction du graphe kept
+    kept_edges = [edges[i] for i in t_idx]
+    G_kept = nx.Graph()
+    G_kept.add_nodes_from(nodes_data)
+    G_kept.add_edges_from(kept_edges)
 
-    G_fold_val = nx.Graph()
-    G_fold_val.add_nodes_from(G_train_nodes_data)
-    G_fold_val.add_edges_from(val_edges)
+    # Séparation en graphe de train/test
+    G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
     
-    G_fold_train = computeStructureFeatures(G_fold_train)
-    G_fold_train = computeCommunityFeatures(G_fold_train)
-    G_fold_train = computeDistanceFeatures(G_fold_train)
+    # G_hiden : pour le validation set
+    hidden_edges = [edges[i] for i in v_idx]
+    G_hidden = nx.Graph()
+    G_hidden.add_nodes_from(nodes_data)
+    G_hidden.add_edges_from(hidden_edges)
 
-    ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-    ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
+    # Enrichissement du graphe de train
+    G_train = computeStructureFeatures(G_train)
+    G_train = computeCommunityFeatures(G_train)
+    G_train = computeDistanceFeatures(G_train)
+
+    # Enrichissement du graphe de validation finale
+    G_kept = computeStructureFeatures(G_kept)
+    G_kept = computeCommunityFeatures(G_kept)
+    G_kept = computeDistanceFeatures(G_kept)
+
+    # Création des datasets
+    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0) 
+    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0)
     
     return (ds_train, ds_val)
 
-def _prepare_precalculated_folds(G_train, k=1, n_jobs=-1):
-    edges = list(G_train.edges())
-    nodes_data = list(G_train.nodes(data=True)) 
+def _prepare_precalculated_folds(G, k=1, n_jobs=-1):
+    edges = list(G.edges())
+    nodes_data = list(G.nodes(data=True)) 
+
     if k == 1:
-        folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
+        folds_idx = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
     else:
         kf = KFold(n_splits=k, shuffle=True)
         folds_idx = list(kf.split(edges))
 
-    # On lance tous les folds en même temps
+    print(f"[K-FOLD] Préparation de {len(folds_idx)} folds en parallèle...")
+
     precalculated_folds = Parallel(n_jobs=n_jobs)(
-        delayed(_process_single_fold)(i, t_idx, v_idx, edges, nodes_data)
+        delayed(_process_single_fold)(
+            i, t_idx, v_idx, edges, nodes_data
+        )
         for i, (t_idx, v_idx) in enumerate(folds_idx)
     )
     
@@ -649,21 +665,16 @@ def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1
 
     booster = model.get_booster()
     explainer = shap.TreeExplainer(booster)
- 
-    # 3. Calcul des SHAP values
-    # check_additivity=False est parfois nécessaire sur M1/Intel si des erreurs de 
-    # précision flottante bloquent l'exécution.
-    shap_values = explainer.shap_values(X_shap, check_additivity=True)
 
-    # 4. Normalisation de la sortie
-    # TreeExplainer renvoie souvent une liste pour les classifieurs [values_0, values_1]
-    if isinstance(shap_values, list):
-        # On prend les valeurs pour la classe positive
-        shap_values_array = shap_values[1]
+    shap_explanation = explainer(X_shap)
+    
+    if isinstance(shap_explanation, tuple):
+        # On ne garde que l'explication pour la classe 1 (positif)
+        shap_explanation = shap_explanation[1]
     else:
-        shap_values_array = shap_values
+        shap_explanation = shap_explanation
 
-    return shap_values_array, X_shap, explainer
+    return shap_explanation
 
 def display_shap(graphname, output_dir="outputs/plots"):
 
