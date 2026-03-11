@@ -631,6 +631,40 @@ def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
     
     return shap_explanation
 
+def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
+    """
+    Version optimisée via TreeExplainer pour modèles basés sur les arbres.
+    """
+    pos_indices = y_test[y_test == 1].index
+    n_pos = min(len(pos_indices), max_pos)
+    pos_sample = pos_indices[:n_pos]
+    
+    n_neg = int(n_pos * negative_ratio)
+    neg_indices = y_test[y_test == 0].index
+    neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
+    
+    X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    
+    print(f"Calcul TreeExplainer : {len(X_shap)} échantillons au total.")
+
+    booster = model.get_booster()
+    explainer = shap.TreeExplainer(booster)
+ 
+    # 3. Calcul des SHAP values
+    # check_additivity=False est parfois nécessaire sur M1/Intel si des erreurs de 
+    # précision flottante bloquent l'exécution.
+    shap_values = explainer.shap_values(X_shap, check_additivity=True)
+
+    # 4. Normalisation de la sortie
+    # TreeExplainer renvoie souvent une liste pour les classifieurs [values_0, values_1]
+    if isinstance(shap_values, list):
+        # On prend les valeurs pour la classe positive
+        shap_values_array = shap_values[1]
+    else:
+        shap_values_array = shap_values
+
+    return shap_values_array, X_shap, explainer
+
 def display_shap(graphname, output_dir="outputs/plots"):
 
     filename = f"shap_explainer_{graphname}.joblib"

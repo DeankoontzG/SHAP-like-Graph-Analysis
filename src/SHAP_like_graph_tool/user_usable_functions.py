@@ -69,7 +69,7 @@ def execute(G, G_name, steps= ["prep", "shap"]):
             X_hidden = data['X_hidden']
             y_hidden = data['y_hidden']
 
-        shap_explanation = analyze_with_shap(model, X_hidden, y_hidden)
+        shap_explanation = analyze_with_shap_tree(model, X_hidden, y_hidden)
         print("Sauvegarde de l'analyse SHAP")
         loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name}.joblib", mode="save")
 
