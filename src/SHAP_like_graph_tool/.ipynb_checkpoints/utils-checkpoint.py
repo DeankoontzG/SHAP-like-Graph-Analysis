@@ -15,6 +15,7 @@ import graph_tool.all as gt
 import shap
 import os
 import joblib
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
@@ -150,7 +151,14 @@ def _extract_pair_features(G_train, u, v, densities):
 
     return features
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
+def _worker_extract(u, v, target, G_train, densities):
+    """
+    Fonction isolée pour un processus : extrait les features d'une paire unique.
+    """
+    features = _extract_pair_features(G_train, u, v, densities)
+    return {'u': u, 'v': v, 'target': target, **features}
+
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
@@ -159,34 +167,30 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     all_edges = list(G.edges())
     nodes = list(G.nodes())
     n_pos = len(all_edges)
-    data = []
-    densities = prepare_all_densities(G_train) # Calcul des densités inter blocs pour les commu
+    densities = prepare_all_densities(G_train)
 
-    print(f"Extraction des features pour {n_pos} liens positifs...")
-    # --- 1. CLASSE POSITIVE ---
-    for u, v in all_edges:
-        features = _extract_pair_features(G_train, u, v, densities)
-        row = {'u': u, 'v': v, 'target': 1}
-        row.update(features)
-        data.append(row)
+    print(f"Préparation des listes de paires...")
+    tasks = [(u, v, 1) for u, v in all_edges]
     
-    # --- 2. CLASSE NÉGATIVE ---
     n_neg_target = int(n_pos * negative_ratio)
-    print(f"Génération de {n_neg_target} non-liens (ratio {negative_ratio})...")
-    
     neg_count = 0
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
         if u != v and not G.has_edge(u, v):
-            features = _extract_pair_features(G_train, u, v, densities)
-            row = {'u': u, 'v': v, 'target': 0}
-            row.update(features)
-            data.append(row)
+            tasks.append((u, v, 0))
             neg_count += 1
 
-    df = pd.DataFrame(data)
+    print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_worker_extract)(u, v, target, G_train, densities) 
+        for u, v, target in tasks
+    )
+
+    df = pd.DataFrame(results)
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
+
 
 ### Fonction de calcul de features de structure des noeuds
 def computeStructureFeatures(G_train):
@@ -487,38 +491,43 @@ def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph
     
     return best_params, summary_df
 
-def _prepare_precalculated_folds(G_train, k=1):
+def _process_single_fold(f_idx, train_idx, val_idx, edges, G_train_nodes_data):
+    print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
+    train_edges = [edges[i] for i in train_idx]
+    val_edges = [edges[i] for i in val_idx]
+    
+    G_fold_train = nx.Graph()
+    G_fold_train.add_nodes_from(G_train_nodes_data)
+    G_fold_train.add_edges_from(train_edges)
+
+    G_fold_val = nx.Graph()
+    G_fold_val.add_nodes_from(G_train_nodes_data)
+    G_fold_val.add_edges_from(val_edges)
+    
+    G_fold_train = computeStructureFeatures(G_fold_train)
+    G_fold_train = computeCommunityFeatures(G_fold_train)
+    G_fold_train = computeDistanceFeatures(G_fold_train)
+
+    ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
+    ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
+    
+    return (ds_train, ds_val)
+
+def _prepare_precalculated_folds(G_train, k=1, n_jobs=-1):
     edges = list(G_train.edges())
+    nodes_data = list(G_train.nodes(data=True)) 
     if k == 1:
         folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
     else:
         kf = KFold(n_splits=k, shuffle=True)
         folds_idx = list(kf.split(edges))
 
-    precalculated_folds = []
-
-    for f_idx, (train_idx, val_idx) in enumerate(folds_idx):
-        print(f"--- Pré-calcul Fold {f_idx + 1} ---")
-        train_edges = [edges[i] for i in train_idx]
-        current_val_edges = [edges[i] for i in val_idx]
-        
-        G_fold_train = nx.Graph()
-        G_fold_train.add_nodes_from(G_train.nodes(data=True))
-        G_fold_train.add_edges_from(train_edges)
-
-        G_fold_val = nx.Graph()
-        G_fold_val.add_nodes_from(G_train.nodes(data=True))
-        G_fold_val.add_edges_from(current_val_edges)
-        
-        G_fold_train = computeStructureFeatures(G_fold_train)
-        G_fold_train = computeCommunityFeatures(G_fold_train)
-        G_fold_train = computeDistanceFeatures(G_fold_train)
-
-        ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-        ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
-        
-        precalculated_folds.append((ds_train, ds_val))
-        
+    # On lance tous les folds en même temps
+    precalculated_folds = Parallel(n_jobs=n_jobs)(
+        delayed(_process_single_fold)(i, t_idx, v_idx, edges, nodes_data)
+        for i, (t_idx, v_idx) in enumerate(folds_idx)
+    )
+    
     return precalculated_folds
 
 def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
@@ -620,6 +629,35 @@ def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
     if len(shap_values.shape) == 3:
         shap_values = shap_values[:, :, 1]
     
+    return shap_explanation
+
+def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
+    """
+    Version optimisée via TreeExplainer pour modèles basés sur les arbres.
+    """
+    pos_indices = y_test[y_test == 1].index
+    n_pos = min(len(pos_indices), max_pos)
+    pos_sample = pos_indices[:n_pos]
+    
+    n_neg = int(n_pos * negative_ratio)
+    neg_indices = y_test[y_test == 0].index
+    neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
+    
+    X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    
+    print(f"Calcul TreeExplainer : {len(X_shap)} échantillons au total.")
+
+    booster = model.get_booster()
+    explainer = shap.TreeExplainer(booster)
+
+    shap_explanation = explainer(X_shap)
+    
+    if isinstance(shap_explanation, tuple):
+        # On ne garde que l'explication pour la classe 1 (positif)
+        shap_explanation = shap_explanation[1]
+    else:
+        shap_explanation = shap_explanation
+
     return shap_explanation
 
 def display_shap(graphname, output_dir="outputs/plots"):
