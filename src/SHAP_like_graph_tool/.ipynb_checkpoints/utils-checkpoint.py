@@ -15,6 +15,7 @@ import graph_tool.all as gt
 import shap
 import os
 import joblib
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
@@ -150,7 +151,14 @@ def _extract_pair_features(G_train, u, v, densities):
 
     return features
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
+def _worker_extract(u, v, target, G_train, densities):
+    """
+    Fonction isolée pour un processus : extrait les features d'une paire unique.
+    """
+    features = _extract_pair_features(G_train, u, v, densities)
+    return {'u': u, 'v': v, 'target': target, **features}
+
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
@@ -159,34 +167,30 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42):
     all_edges = list(G.edges())
     nodes = list(G.nodes())
     n_pos = len(all_edges)
-    data = []
-    densities = prepare_all_densities(G_train) # Calcul des densités inter blocs pour les commu
+    densities = prepare_all_densities(G_train)
 
-    print(f"Extraction des features pour {n_pos} liens positifs...")
-    # --- 1. CLASSE POSITIVE ---
-    for u, v in all_edges:
-        features = _extract_pair_features(G_train, u, v, densities)
-        row = {'u': u, 'v': v, 'target': 1}
-        row.update(features)
-        data.append(row)
+    print(f"Préparation des listes de paires...")
+    tasks = [(u, v, 1) for u, v in all_edges]
     
-    # --- 2. CLASSE NÉGATIVE ---
     n_neg_target = int(n_pos * negative_ratio)
-    print(f"Génération de {n_neg_target} non-liens (ratio {negative_ratio})...")
-    
     neg_count = 0
     while neg_count < n_neg_target:
         u, v = random.sample(nodes, 2)
-        if u != v and not G.has_edge(u, v):
-            features = _extract_pair_features(G_train, u, v, densities)
-            row = {'u': u, 'v': v, 'target': 0}
-            row.update(features)
-            data.append(row)
+        if u != v and not G.has_edge(u, v) and not G_train.has_edge(u, v):
+            tasks.append((u, v, 0))
             neg_count += 1
 
-    df = pd.DataFrame(data)
+    print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
+    
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_worker_extract)(u, v, target, G_train, densities) 
+        for u, v, target in tasks
+    )
+
+    df = pd.DataFrame(results)
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
+
 
 ### Fonction de calcul de features de structure des noeuds
 def computeStructureFeatures(G_train):
@@ -447,8 +451,9 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
-    folds_data = _prepare_precalculated_folds(G_train, k=k)
+def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
+    
+    folds_data = _prepare_precalculated_folds(G, k=k)
     study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
     
     results = []
@@ -487,38 +492,58 @@ def k_fold_cross_validation(G_train, k=2, features_list=None, n_trials=50, graph
     
     return best_params, summary_df
 
-def _prepare_precalculated_folds(G_train, k=1):
-    edges = list(G_train.edges())
+def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data):
+    print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
+    # Construction du graphe kept
+    kept_edges = [edges[i] for i in t_idx]
+    G_kept = nx.Graph()
+    G_kept.add_nodes_from(nodes_data)
+    G_kept.add_edges_from(kept_edges)
+
+    # Séparation en graphe de train/test
+    G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
+    
+    # G_hiden : pour le validation set
+    hidden_edges = [edges[i] for i in v_idx]
+    G_hidden = nx.Graph()
+    G_hidden.add_nodes_from(nodes_data)
+    G_hidden.add_edges_from(hidden_edges)
+
+    # Enrichissement du graphe de train
+    G_train = computeStructureFeatures(G_train)
+    G_train = computeCommunityFeatures(G_train)
+    G_train = computeDistanceFeatures(G_train)
+
+    # Enrichissement du graphe de validation finale
+    G_kept = computeStructureFeatures(G_kept)
+    G_kept = computeCommunityFeatures(G_kept)
+    G_kept = computeDistanceFeatures(G_kept)
+
+    # Création des datasets
+    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0) 
+    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0)
+    
+    return (ds_train, ds_val)
+
+def _prepare_precalculated_folds(G, k=1, n_jobs=-1):
+    edges = list(G.edges())
+    nodes_data = list(G.nodes(data=True)) 
+
     if k == 1:
-        folds_idx = [train_test_split(range(len(edges)), test_size=0.2)]
+        folds_idx = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
     else:
         kf = KFold(n_splits=k, shuffle=True)
         folds_idx = list(kf.split(edges))
 
-    precalculated_folds = []
+    print(f"[K-FOLD] Préparation de {len(folds_idx)} folds en parallèle...")
 
-    for f_idx, (train_idx, val_idx) in enumerate(folds_idx):
-        print(f"--- Pré-calcul Fold {f_idx + 1} ---")
-        train_edges = [edges[i] for i in train_idx]
-        current_val_edges = [edges[i] for i in val_idx]
-        
-        G_fold_train = nx.Graph()
-        G_fold_train.add_nodes_from(G_train.nodes(data=True))
-        G_fold_train.add_edges_from(train_edges)
-
-        G_fold_val = nx.Graph()
-        G_fold_val.add_nodes_from(G_train.nodes(data=True))
-        G_fold_val.add_edges_from(current_val_edges)
-        
-        G_fold_train = computeStructureFeatures(G_fold_train)
-        G_fold_train = computeCommunityFeatures(G_fold_train)
-        G_fold_train = computeDistanceFeatures(G_fold_train)
-
-        ds_train = prepare_balanced_data(G_fold_train, G_fold_train, negative_ratio=10.0)
-        ds_val = prepare_balanced_data(G_fold_val, G_fold_train, negative_ratio=25.0)
-        
-        precalculated_folds.append((ds_train, ds_val))
-        
+    precalculated_folds = Parallel(n_jobs=n_jobs)(
+        delayed(_process_single_fold)(
+            i, t_idx, v_idx, edges, nodes_data
+        )
+        for i, (t_idx, v_idx) in enumerate(folds_idx)
+    )
+    
     return precalculated_folds
 
 def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
@@ -622,6 +647,35 @@ def analyze_with_shap(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
     
     return shap_explanation
 
+def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1.0):
+    """
+    Version optimisée via TreeExplainer pour modèles basés sur les arbres.
+    """
+    pos_indices = y_test[y_test == 1].index
+    n_pos = min(len(pos_indices), max_pos)
+    pos_sample = pos_indices[:n_pos]
+    
+    n_neg = int(n_pos * negative_ratio)
+    neg_indices = y_test[y_test == 0].index
+    neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
+    
+    X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    
+    print(f"Calcul TreeExplainer : {len(X_shap)} échantillons au total.")
+
+    booster = model.get_booster()
+    explainer = shap.TreeExplainer(booster)
+
+    shap_explanation = explainer(X_shap)
+    
+    if isinstance(shap_explanation, tuple):
+        # On ne garde que l'explication pour la classe 1 (positif)
+        shap_explanation = shap_explanation[1]
+    else:
+        shap_explanation = shap_explanation
+
+    return shap_explanation
+
 def display_shap(graphname, output_dir="outputs/plots"):
 
     filename = f"shap_explainer_{graphname}.joblib"
@@ -650,8 +704,8 @@ def display_shap(graphname, output_dir="outputs/plots"):
 def analyse_with_shap_custom(model, X_eval, X_train, baseline="general", output_dir="outputs/plots"):
     groupes = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
-        #"Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
+        #"Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap',"louvain_u","louvain_v","same_louvain"],
+        "Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
         #"Groupe_Communities": ['group_u', 'group_v',  'same_group'],
         "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }

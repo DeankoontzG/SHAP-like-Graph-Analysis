@@ -9,21 +9,27 @@ def execute(G, G_name, steps= ["prep", "shap"]):
         validate_input_graph(G)
         print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
         
-        G_train, G_hidden = hide_graph_links(G, test_size=0.15)
-        loadsave_data_joblib(data=G_train, filename=f"G_train_init_{G_name}", mode="save")
+        G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
+        G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
+        loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_kept}", mode="save")
     
         print("Lacement du k-fold cross validation...")
-        best_params, results_summary = k_fold_cross_validation(G_train, k=1, features_list=None, n_trials=50, graph_name= G_name)
+        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, graph_name= G_name)
         print(best_params)
-    
+
         G_train_with_structure = computeStructureFeatures(G_train)
         G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
         G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
-        print("Sauvegarde du dataset")
+
+        G_kept_with_structure = computeStructureFeatures(G_kept)
+        G_kept_with_communities = computeCommunityFeatures(G_kept_with_structure)
+        G_kept_with_distances = computeDistanceFeatures(G_kept_with_communities)
+        print("Sauvegarde des datasets")
         loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
+        loadsave_data_joblib(data=G_kept_with_distances, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
     
-        dataset_train = prepare_balanced_data(G_train, G_train)
-        dataset_hidden = prepare_balanced_data(G_hidden, G_train, negative_ratio=50.0)
+        dataset_train = prepare_balanced_data(G_test, G_train,  negative_ratio=10.0)
+        dataset_hidden = prepare_balanced_data(G_hidden, G_kept, negative_ratio=50.0)
     
         print("Vérif : colonnes du dataset :")
         print(dataset_train.columns)
@@ -52,7 +58,7 @@ def execute(G, G_name, steps= ["prep", "shap"]):
             "y_hidden": y_hidden,
             "best_params": best_params
         }
-    
+        
         print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
         loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name}.joblib", mode="save")
     
@@ -69,7 +75,7 @@ def execute(G, G_name, steps= ["prep", "shap"]):
             X_hidden = data['X_hidden']
             y_hidden = data['y_hidden']
 
-        shap_explanation = analyze_with_shap(model, X_hidden, y_hidden)
+        shap_explanation = analyze_with_shap_tree(model, X_hidden, y_hidden)
         print("Sauvegarde de l'analyse SHAP")
         loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name}.joblib", mode="save")
 
@@ -79,7 +85,7 @@ def evaluate(G_name, display=False):
     
     group_mapping = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap', "louvain_u", "louvain_v", "same_louvain"],
+        "Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
         "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
 
@@ -118,7 +124,7 @@ def evaluate(G_name, display=False):
     # On recalcule les valeurs de Shapley en traitant les groupes comme des blocs atomiques
     df_coalition_values = analyse_with_shap_custom(
         model=xgboost_data["model"], 
-        X_eval=xgboost_data["X_eval"], 
+        X_eval=xgboost_data["X_hidden"], 
         X_train=xgboost_data["X_train"]
     )
     
@@ -170,7 +176,7 @@ def evaluate(G_name, display=False):
 
 def plot_shap_evolution():
 
-    ratios = [round(r, 2) for r in np.linspace(0, 1, 21)]
+    ratios = [round(r, 2) for r in np.linspace(0, 1, 5)]
     valid_ratios = []
 
     all_results = {
@@ -180,15 +186,16 @@ def plot_shap_evolution():
     }
 
     for r in ratios:
-        G_name = f"artificial_graph_sbm_{r:.2f}_pos_{1-r:.2f}".replace('.', '_')
+        G_name = f"artificial_graph_sbmv2_{r:.2f}_pos_{1-r:.2f}".replace('.', '_')
+        print(f"ZIZI MOU {G_name}")
         filename = f"shap_analysis_{G_name}.joblib"
         try:
             data = loadsave_data_joblib(data=None, filename=filename, mode="load")
             
             shaps = {
-                "base": data["shap_explanation_grouped"],
-                "abs": data["shap_explanation_abs"],
-                "custom": data["exp_groups_custom"] 
+                "base": data["exp_aggr_sum"],
+                "abs": data["exp_aggr_abs"],
+                "custom": data["exp_coalition_exact"] 
             }
 
             for k, exp in shaps.items():
