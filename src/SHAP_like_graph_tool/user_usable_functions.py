@@ -85,7 +85,7 @@ def evaluate(G_name, display=False):
     
     group_mapping = {
         "Groupe_Structure": ['cn', 'aa', 'jc', 'pa', 'sp', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v'],
-        "Groupe_Communities": ['sbm_u', 'sbm_v', 'same_sbm', 'infomap_u', 'infomap_v', 'same_infomap', "louvain_u", "louvain_v", "same_louvain"],
+        "Groupe_Communities": ['sbm_density', 'same_sbm', 'infomap_density', 'same_infomap',"louvain_density", "same_louvain"],
         "Groupe_Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
     }
 
@@ -124,7 +124,7 @@ def evaluate(G_name, display=False):
     # On recalcule les valeurs de Shapley en traitant les groupes comme des blocs atomiques
     df_coalition_values = analyse_with_shap_custom(
         model=xgboost_data["model"], 
-        X_eval=xgboost_data["X_eval"], 
+        X_eval=xgboost_data["X_hidden"], 
         X_train=xgboost_data["X_train"]
     )
     
@@ -176,7 +176,7 @@ def evaluate(G_name, display=False):
 
 def plot_shap_evolution():
 
-    ratios = [round(r, 2) for r in np.linspace(0, 1, 21)]
+    ratios = [round(r, 2) for r in np.linspace(0, 1, 5)]
     valid_ratios = []
 
     all_results = {
@@ -186,15 +186,16 @@ def plot_shap_evolution():
     }
 
     for r in ratios:
-        G_name = f"artificial_graph_sbm_{r:.2f}_pos_{1-r:.2f}".replace('.', '_')
+        G_name = f"artificial_graph_sbmv2_{r:.2f}_pos_{1-r:.2f}".replace('.', '_')
+        print(f"ZIZI MOU {G_name}")
         filename = f"shap_analysis_{G_name}.joblib"
         try:
             data = loadsave_data_joblib(data=None, filename=filename, mode="load")
             
             shaps = {
-                "base": data["shap_explanation_grouped"],
-                "abs": data["shap_explanation_abs"],
-                "custom": data["exp_groups_custom"] 
+                "base": data["exp_aggr_sum"],
+                "abs": data["exp_aggr_abs"],
+                "custom": data["exp_coalition_exact"] 
             }
 
             for k, exp in shaps.items():
