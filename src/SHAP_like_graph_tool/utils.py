@@ -3,14 +3,17 @@ from re import X
 import numpy as np
 import pandas as pd
 import networkx as nx
+import igraph as ig
 import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
+from scipy.sparse.linalg import eigsh
 from node2vec import Node2Vec
 from infomap import Infomap
+import leidenalg as la
 import graph_tool.all as gt
 import shap
 import os
@@ -20,9 +23,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
-from sklearn.model_selection import KFold, train_test_split
 from xgboost import XGBClassifier
 import optuna
+
 
 
 ###############################################################
@@ -32,7 +35,7 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 METRICS_NODE = ["pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -147,9 +150,13 @@ def _extract_pair_features(G_train, u, v, densities):
         if emb in nu and emb in nv:
             vec_u = nu[emb].reshape(1, -1)
             vec_v = nv[emb].reshape(1, -1)
+            hadamard_prod = vec_u * vec_v
             features[f'{emb}_cos'] = cosine_similarity(vec_u, vec_v)[0][0]
             features[f'{emb}_dist'] = np.linalg.norm(vec_u - vec_v)
-
+            features[f'{emb}_dist_sq'] = np.linalg.norm(vec_u - vec_v)**2
+            features[f'{emb}_had_mean'] = np.mean(hadamard_prod)
+            features[f'{emb}_had_std'] = np.std(hadamard_prod)
+        
     return features
 
 def _worker_extract(u, v, target, G_train, densities):
@@ -157,6 +164,7 @@ def _worker_extract(u, v, target, G_train, densities):
     Fonction isolée pour un processus : extrait les features d'une paire unique.
     """
     features = _extract_pair_features(G_train, u, v, densities)
+
     return {'u': u, 'v': v, 'target': target, **features}
 
 def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
@@ -183,12 +191,21 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
 
     print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
     
+<<<<<<< Updated upstream
     results = Parallel(n_jobs=n_jobs, batch_size=1000)(
+=======
+    results = Parallel(n_jobs=n_jobs, batch_size=500)(
+>>>>>>> Stashed changes
         delayed(_worker_extract)(u, v, target, G_train, densities) 
         for u, v, target in tasks
     )
 
     df = pd.DataFrame(results)
+
+    for emb in EMBEDDINGS:
+        dist_col = f'{emb}_dist'
+        df[f'{emb}_rank'] = df[dist_col].rank(pct=True)
+
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
 
@@ -233,6 +250,46 @@ def _appendLouvainCommunities(G_train):
 
     nx.set_node_attributes(G_train, node_to_community, "louvain_id")
     _normalize_community_assignment(G_train, "louvain_id")
+
+
+def _appendLeidenCommunities(G_train):
+    nodes_list = list(G_train.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes_list)}
+    edges = [(node_to_idx[u], node_to_idx[v]) for u, v in G_train.edges()]
+    ig_g = ig.Graph(len(nodes_list), edges)
+
+    part_leiden = la.find_partition(ig_g, la.ModularityVertexPartition, seed=42)
+    leiden_id = {nodes_list[i]: cluster for i, cluster in enumerate(part_leiden.membership)}
+    nx.set_node_attributes(G_train, leiden_id, "leiden_id")
+    _normalize_community_assignment(G_train, "leiden_id")
+    
+    return G_train
+
+def _appendSurpriseCommunities(G_train):
+    nodes_list = list(G_train.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes_list)}
+    edges = [(node_to_idx[u], node_to_idx[v]) for u, v in G_train.edges()]
+    ig_g = ig.Graph(len(nodes_list), edges)
+
+    part_surprise = la.find_partition(ig_g, la.SurpriseVertexPartition, seed=42)
+    surprise_id = {nodes_list[i]: cluster for i, cluster in enumerate(part_surprise.membership)}
+    nx.set_node_attributes(G_train, surprise_id, "surprise_id")
+    _normalize_community_assignment(G_train, "surprise_id")
+    
+    return G_train
+
+def _appendSignificanceCommunities(G_train):
+    nodes_list = list(G_train.nodes())
+    node_to_idx = {node: i for i, node in enumerate(nodes_list)}
+    edges = [(node_to_idx[u], node_to_idx[v]) for u, v in G_train.edges()]
+    ig_g = ig.Graph(len(nodes_list), edges)
+    
+    part_significance = la.find_partition(ig_g, la.SignificanceVertexPartition, seed=42)
+    significance_id = {nodes_list[i]: cluster for i, cluster in enumerate(part_significance.membership)}
+    nx.set_node_attributes(G_train, significance_id, "significance_id")
+    _normalize_community_assignment(G_train, "significance_id")
+    
+    return G_train
 
 def _appendInfomapCommunities(G_train):
     im = Infomap("--two-level --silent")
@@ -299,7 +356,11 @@ def _normalize_community_assignment(G, attr_name):
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
     'infomap': _appendInfomapCommunities,
-    'sbm': _appendGraphToolSBM
+    'sbm': _appendGraphToolSBM,
+    'leiden': _appendLeidenCommunities,
+    'surprise': _appendSurpriseCommunities,
+    'significance': _appendSignificanceCommunities
+
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
