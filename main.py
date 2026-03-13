@@ -52,10 +52,10 @@ if __name__ == "__main__":
 
     names_list = [#"blumenau_drug",
                   #"facebook_friends",
-                  "cintestinalis",
-                  "faculty_hiring_computer_science", 
-                  "jazz_collab",
-                  "wiki_science",
+                  #"cintestinalis",
+                  #"faculty_hiring_computer_science", 
+                  #"jazz_collab",
+                  #"wiki_science",
                   "Airports"]
                   
     
