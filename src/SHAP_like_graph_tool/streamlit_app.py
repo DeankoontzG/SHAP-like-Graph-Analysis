@@ -21,11 +21,13 @@ def compute_live_shap(model, rows, masker_data):
     return vals
 
 @st.cache_data
-def get_avg_top_k_shap(_model, _top_k_df, _masker_sample):
+def get_avg_top_k_shap(graph_name, k_value, _model, _top_k_df, _masker_sample):
     cols_to_exclude = ['prob', 'target']
     clean_sample = _top_k_df.drop(columns=[c for c in cols_to_exclude if c in _top_k_df.columns])
     
-    sample_to_explain = clean_sample.sample(n=min(20, len(clean_sample)), random_state=42)
+    n_samples = min(50, len(clean_sample))
+    sample_to_explain = clean_sample.sample(n=n_samples, random_state=42)
+    
     vals = compute_live_shap(_model, sample_to_explain, _masker_sample)
     return vals.mean(axis=0)
 
@@ -48,8 +50,34 @@ feature_groups = {
     "Embeddings": ['n2v_homophily_cos', 'n2v_homophily_dist', 'deepwalk_cos', 'deepwalk_dist']
 }
 
-G_name = "artificial_graph_sbmv2_0_00_pos_1_00" 
-data = load_essentials(G_name)
+# --- GÉNÉRATION DES OPTIONS DE GRAPHES ---
+def get_graph_names():
+    names = []
+    for i in [0.0, 0.25, 0.5, 0.75, 1.0]:
+        pos = 1.0 - i
+        s_i = f"{i:.2f}".replace('.', '_')
+        s_p = f"{pos:.2f}".replace('.', '_')
+        names.append(f"artificial_graph_sbmv2_{s_i}_pos_{s_p}")
+        
+    for i_int in range(0, 105, 5):
+        i = i_int / 100.0
+        pos = 1.0 - i
+        s_i = f"{i:.2f}".replace('.', '_')
+        s_p = f"{pos:.2f}".replace('.', '_')
+        names.append(f"artificial_graph_sbm_{s_i}_pos_{s_p}")
+    
+    return names
+
+graph_options = get_graph_names()
+
+# --- SIDEBAR : SÉLECTION DU PROJET ---
+st.sidebar.header("📁 Configuration du Graphe")
+selected_graph = st.sidebar.selectbox(
+    "Choisir le graphe à analyser :",
+    options=graph_options,
+    index=graph_options.index("artificial_graph_sbmv2_0_00_pos_1_00") # Valeur par défaut
+)
+data = load_essentials(selected_graph)
 
 if data:
     # Définition des variables de base
@@ -73,10 +101,10 @@ if data:
     masker_sample = X_hidden.sample(n=min(100, len(X_hidden)), random_state=42)
     
     with st.spinner("Calcul de la signature moyenne du Top-K..."):
-        avg_shap_values = get_avg_top_k_shap(model, top_k_df, masker_sample)
+        avg_shap_values = get_avg_top_k_shap(selected_graph, k, model, top_k_df, masker_sample)
 
     # --- 4. INTERFACE PRINCIPALE ---
-    st.title(f"🔍 Analyse Live : {G_name}")
+    st.title(f"🔍 Analyse Live : {selected_graph}")
     
     col_list, col_shap = st.columns([1, 1.5])
 

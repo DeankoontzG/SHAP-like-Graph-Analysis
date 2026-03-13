@@ -33,7 +33,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk']
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm']
-METRICS_NODE = ["pr", "lcc", "and", "dc"]
+METRICS_NODE = ["pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -121,6 +121,7 @@ def _extract_pair_features(G_train, u, v, densities):
     features = {
         'cn': len(list(nx.common_neighbors(G_train, u, v))),
         'aa': next(nx.adamic_adar_index(G_train, [(u, v)]))[2],
+        'ra': next(nx.resource_allocation_index(G_train, [(u, v)]))[2],
         'jc': next(nx.jaccard_coefficient(G_train, [(u, v)]))[2],
         'pa': next(nx.preferential_attachment(G_train, [(u, v)]))[2],
         'sp': nx.shortest_path_length(G_train, u, v) if nx.has_path(G_train, u, v) else 42
@@ -195,18 +196,27 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
 ### Fonction de calcul de features de structure des noeuds
 def computeStructureFeatures(G_train):
     print("\n--- Enrichissement du Graphe avec les Métriques de Structure ---")
-    print("Calcul : PageRank, Clustering, Average Neighbor Degree, Degree Centrality")
+    adj = nx.to_scipy_sparse_array(G_train, dtype=float)
+    lambda_max = eigsh(adj, k=1, which='LM', return_eigenvectors=False)[0]
+    alpha_safe = 0.85 / lambda_max
+
+    print("Calcul : PageRank, Clustering, Average Neighbor Degree, Degree Centrality, Katz")
     pr = nx.pagerank(G_train)
+    ppr = nx.pagerank(G_train, alpha=0.5)
     lcc = nx.clustering(G_train)
     avg_nd = nx.average_neighbor_degree(G_train)
     dc = nx.degree_centrality(G_train)
+    katz = nx.katz_centrality(G_train, alpha=alpha_safe, max_iter=1000)
+
 
     for node in G_train.nodes():
         G_train.nodes[node].update({
             'pr': pr.get(node, 0),
+            "ppr": ppr.get(node, 0),
             'lcc': lcc.get(node, 0),
             'and': avg_nd.get(node, 0),
-            'dc': dc.get(node, 0)
+            'dc': dc.get(node, 0),
+            'katz': katz.get(node,0)
         })
     
     return G_train
