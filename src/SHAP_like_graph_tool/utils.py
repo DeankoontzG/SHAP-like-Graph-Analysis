@@ -196,7 +196,7 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, n_jobs=-2):
 
     print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
     
-    results = Parallel(n_jobs=n_jobs, batch_size=1000)(
+    results = Parallel(n_jobs=n_jobs, batch_size=1000, backend="loky")(
         delayed(_worker_extract)(u, v, target, G_train, densities) 
         for u, v, target in tasks
     )
