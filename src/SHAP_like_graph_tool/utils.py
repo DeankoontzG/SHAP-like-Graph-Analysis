@@ -19,12 +19,14 @@ import shap
 import os
 import joblib
 from joblib import Parallel, delayed
+import multiprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
 from xgboost import XGBClassifier
 import optuna
+import time
 
 
 
@@ -424,6 +426,8 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
     print(f"Calcul de Node2Vec (p={p}, q={q})...")
     print(f"Génération des marches aléatoires (dim={dimensions})...")
+
+    cores = multiprocessing.cpu_count() -1
     
     # Configuration de Node2Vec
     # p=1, q=1 -> équivalent à DeepWalk
@@ -437,14 +441,19 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
                         p=p, q=q)
 
     print("Entraînement du modèle Skip-gram...")
+    start_skip = time.time()
     try:
-        model = node2vec.fit(window=10, min_count=1, batch_words=4, vector_size=dimensions)
+        model = node2vec.fit(window=10, min_count=1, batch_words=1000, vector_size=dimensions, workers=cores)
     except TypeError:
-        model = node2vec.fit(window=10, min_count=1, batch_words=4, size=dimensions)
+        model = node2vec.fit(window=10, min_count=1, batch_words=1000, size=dimensions, workers=cores)
     
     # On récupère les vecteurs dans un dictionnaire
     embeddings = {node: model.wv[str(node)] for node in G_train.nodes()}
     nx.set_node_attributes(G_train, embeddings, attr_name)
+
+    end_skip = time.time()
+    skipgram_duration = end_skip - start_skip
+    print(f"Terminé en {skipgram_duration:.2f}s")
 
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
