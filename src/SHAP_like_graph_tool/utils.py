@@ -437,7 +437,7 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
                         dimensions=dimensions, 
                         walk_length=30, 
                         num_walks=100, 
-                        workers=4, 
+                        workers=cores, 
                         p=p, q=q)
 
     print("Entraînement du modèle Skip-gram...")
@@ -453,7 +453,8 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
 
     end_skip = time.time()
     skipgram_duration = end_skip - start_skip
-    print(f"Terminé en {skipgram_duration:.2f}s")
+    print(f"Skip-gram terminé en {skipgram_duration:.2f}s")
+    
 
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),

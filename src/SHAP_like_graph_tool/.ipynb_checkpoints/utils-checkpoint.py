@@ -19,12 +19,14 @@ import shap
 import os
 import joblib
 from joblib import Parallel, delayed
+import multiprocessing
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import json
 from xgboost import XGBClassifier
 import optuna
+import time
 
 
 
@@ -167,12 +169,17 @@ def _worker_extract(u, v, target, G_train, densities):
 
     return {'u': u, 'v': v, 'target': target, **features}
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, n_jobs=-2):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
     """
-    random.seed(seed)
+    total_cores = os.cpu_count() or 1
+    if n_jobs < 0:
+        n_jobs = max(1, total_cores + n_jobs)
+    else:
+        n_jobs = min(n_jobs, total_cores) if n_jobs > 0 else total_cores
+
     all_edges = list(G.edges())
     nodes = list(G.nodes())
     n_pos = len(all_edges)
@@ -191,7 +198,7 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, seed=42, n_jobs=-1):
 
     print(f"Extraction parallèle sur {len(tasks)} paires (n_jobs={n_jobs})...")
     
-    results = Parallel(n_jobs=n_jobs, batch_size=1000)(
+    results = Parallel(n_jobs=n_jobs, batch_size=1000, backend="loky")(
         delayed(_worker_extract)(u, v, target, G_train, densities) 
         for u, v, target in tasks
     )
@@ -419,6 +426,8 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
     print(f"Calcul de Node2Vec (p={p}, q={q})...")
     print(f"Génération des marches aléatoires (dim={dimensions})...")
+
+    cores = multiprocessing.cpu_count() -1
     
     # Configuration de Node2Vec
     # p=1, q=1 -> équivalent à DeepWalk
@@ -428,18 +437,24 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
                         dimensions=dimensions, 
                         walk_length=30, 
                         num_walks=100, 
-                        workers=4, 
+                        workers=cores, 
                         p=p, q=q)
 
     print("Entraînement du modèle Skip-gram...")
+    start_skip = time.time()
     try:
-        model = node2vec.fit(window=10, min_count=1, batch_words=4, vector_size=dimensions)
+        model = node2vec.fit(window=10, min_count=1, batch_words=1000, vector_size=dimensions, workers=cores)
     except TypeError:
-        model = node2vec.fit(window=10, min_count=1, batch_words=4, size=dimensions)
+        model = node2vec.fit(window=10, min_count=1, batch_words=1000, size=dimensions, workers=cores)
     
     # On récupère les vecteurs dans un dictionnaire
     embeddings = {node: model.wv[str(node)] for node in G_train.nodes()}
     nx.set_node_attributes(G_train, embeddings, attr_name)
+
+    end_skip = time.time()
+    skipgram_duration = end_skip - start_skip
+    print(f"Skip-gram terminé en {skipgram_duration:.2f}s")
+    
 
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
@@ -592,7 +607,7 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data):
     
     return (ds_train, ds_val)
 
-def _prepare_precalculated_folds(G, k=1, n_jobs=-1):
+def _prepare_precalculated_folds(G, k=1):
     edges = list(G.edges())
     nodes_data = list(G.nodes(data=True)) 
 
@@ -602,14 +617,13 @@ def _prepare_precalculated_folds(G, k=1, n_jobs=-1):
         kf = KFold(n_splits=k, shuffle=True)
         folds_idx = list(kf.split(edges))
 
-    print(f"[K-FOLD] Préparation de {len(folds_idx)} folds en parallèle...")
+    print(f"[K-FOLD] Préparation séquentielle de {len(folds_idx)} folds...")
 
-    precalculated_folds = Parallel(n_jobs=n_jobs, batch_size=1)(
-        delayed(_process_single_fold)(
-            i, t_idx, v_idx, edges, nodes_data
-        )
+    # Anciennement //isé, plus efficace comme ça pour éviter //isations imbriquées.
+    precalculated_folds = [
+        _process_single_fold(i, t_idx, v_idx, edges, nodes_data)
         for i, (t_idx, v_idx) in enumerate(folds_idx)
-    )
+    ]
     
     return precalculated_folds
 
@@ -656,6 +670,7 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
 
         return avg_auc_v
 
+    optuna.logging.set_verbosity(optuna.logging.WARNING)  # Pour ne garder que les logs d'erreur d'optuna
     study = optuna.create_study(direction='maximize')
     baseline = {'learning_rate': 0.1, 'max_depth': 6, 'min_child_weight': 6,
         'subsample': 1.0, 'colsample_bytree': 1.0, 'reg_alpha': 1e-3, 'reg_lambda': 1.0

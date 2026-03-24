@@ -35,6 +35,7 @@ import json
 from sklearn.model_selection import KFold, train_test_split
 from xgboost import XGBClassifier
 import optuna
+import time
 
 # nohup python -u main.py 2>&1 | grep --line-buffered -vE "it/s|%|\[.*\]" | grep --line-buffered "." > myoutfile.log &
 
@@ -49,45 +50,35 @@ def load_graphml_safe(path):
         return G
 
 if __name__ == "__main__":
-
-    names_list = [#"blumenau_drug",
-                  "facebook_friends",
-                  "cintestinalis",
-                  "faculty_hiring_computer_science", 
-                  "jazz_collab",
-                  "wiki_science"
-                  #"Airports"
-    ]
                   
-    
-    for name in names_list:
+    for sbm_ratio in np.arange(0.0, 1.1, 0.1):
+        
+        G_name = f"artificial_graph_sbmv3_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}.graphml".replace('.', '_')         
         print("######################################")
-        print(f"#### graph {name} :  ####")
+        print(f"#### graph {G_name} :  ####")
         print("######################################")
-        G_name = f"reel_{name}"  
+        
         path = f"graph_library/{G_name}.graphml"
-        print(G_name)
-    
+        
         try:
             G = load_graphml_safe(path)
             print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
         except Exception as e:
-            print(f"Erreur lors de la conversion : {e}")
-    
-        gp.execute(G, G_name)
+            print(f"Erreur lors du chargement de {path} : {e}")
 
-    for name in names_list:
-        print("######################################")
-        print(f"#### graph {name} :  ####")
-        print("######################################")
-        G_name = f"reel_{name}"  
-        path = f"graph_library/{G_name}.graphml"
-        print(G_name)
+        start_time = time.time()
+        gp.execute(G, G_name)     
+        end_time = time.time()
+        duration = end_time - start_time
+
+        execution_stats.append({
+                "Graph": G_name,
+                "Nodes": G.number_of_nodes(),
+                "Edges": G.number_of_edges(),
+                "Time_sec": round(duration, 2),
+                "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
+                "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
+            })
+            
+        print(f"⏱️ Terminé en {duration:.2f} secondes.")
     
-        try:
-            G = load_graphml_safe(path)
-            print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-        except Exception as e:
-            print(f"Erreur lors de la conversion : {e}")
-    
-        gp.evaluate(G_name)
