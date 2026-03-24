@@ -50,10 +50,12 @@ def load_graphml_safe(path):
         return G
 
 if __name__ == "__main__":
+
+    execution_stats = []
                   
     for sbm_ratio in np.arange(0.0, 1.1, 0.1):
         
-        G_name = f"artificial_graph_sbmv3_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}.graphml".replace('.', '_')         
+        G_name = f"artificial_graph_sbmv3_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
         print("######################################")
         print(f"#### graph {G_name} :  ####")
         print("######################################")
@@ -67,7 +69,7 @@ if __name__ == "__main__":
             print(f"Erreur lors du chargement de {path} : {e}")
 
         start_time = time.time()
-        gp.execute(G, G_name)     
+        gp.evaluate(G_name)     
         end_time = time.time()
         duration = end_time - start_time
 
@@ -81,4 +83,9 @@ if __name__ == "__main__":
             })
             
         print(f"⏱️ Terminé en {duration:.2f} secondes.")
-    
+
+    df = pd.DataFrame(execution_stats)
+    print("\n" + "="*50)
+    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("="*50)
+    print(df.to_string(index=False))

@@ -28,8 +28,8 @@ def execute(G, G_name, steps= ["prep", "shap"]):
         loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
         loadsave_data_joblib(data=G_kept_with_distances, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
     
-        dataset_train = prepare_balanced_data(G_test, G_train,  negative_ratio=10.0)
-        dataset_hidden = prepare_balanced_data(G_hidden, G_kept, negative_ratio=50.0)
+        dataset_train = prepare_balanced_data(G_test, G_train_with_distances,  negative_ratio=10.0)
+        dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_distances, negative_ratio=50.0)
     
         print("Vérif : colonnes du dataset :")
         print(dataset_train.columns)
@@ -58,7 +58,7 @@ def execute(G, G_name, steps= ["prep", "shap"]):
             "y_hidden": y_hidden,
             "best_params": best_params
         }
-        
+
         print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
         loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name}.joblib", mode="save")
     
