@@ -36,7 +36,7 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk']
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 METRICS_NODE = ["pr", "ppr", "lcc", "and", "dc", "katz"]
 
@@ -519,8 +519,7 @@ def _apply_crosswalk_weights(G_train, group_attr='sbm_id', alpha=0.5, p_bound=1.
     return G_train
 
 def _append_crosswalk_features(G_train, p, q, attr_name, dimensions=64):
-    G_weighted = G_train.copy() 
-    G_weighted = _apply_crosswalk_weights(G_weighted, group_attr='sbm_id', alpha=0.7)
+    G_weighted = G_train.copy()
 
     _append_node2vec_features(G_weighted, p=p, q=q,  attr_name=attr_name, dimensions=dimensions)
     embeddings = nx.get_node_attributes(G_weighted, attr_name)

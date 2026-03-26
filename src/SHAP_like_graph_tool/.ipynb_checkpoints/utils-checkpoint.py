@@ -36,7 +36,7 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk']
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 METRICS_NODE = ["pr", "ppr", "lcc", "and", "dc", "katz"]
 
@@ -454,11 +454,82 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     end_skip = time.time()
     skipgram_duration = end_skip - start_skip
     print(f"Skip-gram terminé en {skipgram_duration:.2f}s")
-    
 
+def _apply_crosswalk_weights(G_train, group_attr='sbm_id', alpha=0.5, p_bound=1.0, walk_length_d=5, num_walks_r=10):
+    print(f"Application du biais Crosswalk (alpha={alpha})...")
+    print(f"Calcul de m(v) via {num_walks_r} marches de longueur {walk_length_d}...")
+    
+    m = {}
+    nodes = list(G_train)
+    
+    # 1 - Calcul de m(v) basé sur r rdm wlaks de taille d
+    for v in nodes:
+        lv = G_train.nodes[v][group_attr]
+        total_cross_group_visits = 0
+        
+        for _ in range(num_walks_r):
+            current_node = v
+            for _ in range(walk_length_d):
+                neighbors = list(G_train.neighbors(current_node))
+                if not neighbors:
+                    break
+                
+                weights = [G_train[current_node][nbr].get('weight', 1.0) for nbr in neighbors]
+                current_node = random.choices(neighbors, weights=weights, k=1)[0]
+                
+                if G_train.nodes[current_node][group_attr] != lv:
+                    total_cross_group_visits += 1
+        
+        m[v] = total_cross_group_visits / (num_walks_r * walk_length_d)
+        
+        if m[v] == 0:
+            m[v] = 1e-6
+
+    # 2 - Repondération des arêtes
+    new_weights = {}
+    for v in G_train.nodes():
+        neighbors = list(G_train.neighbors(v))
+        if not neighbors: continue
+        
+        lv = G_train.nodes[v][group_attr]
+        
+        same_group_neighbors = [u for u in neighbors if G_train.nodes[u][group_attr] == lv]
+        diff_group_neighbors = [u for u in neighbors if G_train.nodes[u][group_attr] != lv]
+        
+        sum_same = sum(G_train.get_edge_data(v, u).get('weight', 1.0) * (m[u]**p_bound) for u in same_group_neighbors)
+        sum_diff = sum(G_train.get_edge_data(v, u).get('weight', 1.0) * (m[u]**p_bound) for u in diff_group_neighbors)
+        
+        # Attribution des nouveaux poids
+        for u in neighbors:
+            w_vu = G_train.get_edge_data(v, u).get('weight', 1.0)
+            lu = G_train.nodes[u][group_attr]
+            
+            if lu == lv:
+                new_w = (1 - alpha) * w_vu * (m[u]**p_bound) / sum_same if sum_same > 0 else w_vu
+            else:
+                num_diff_groups = len(set(G_train.nodes[z][group_attr] for z in diff_group_neighbors))
+                new_w = (alpha * w_vu * (m[u]**p_bound)) / (num_diff_groups * sum_diff) if sum_diff > 0 else w_vu
+            
+            new_weights[(v, u)] = new_w
+
+    # 3 - MAJ du graphe
+    nx.set_edge_attributes(G_train, new_weights, 'weight')
+    print("Repondération terminée.")
+
+    return G_train
+
+def _append_crosswalk_features(G_train, p, q, attr_name, dimensions=64):
+    G_weighted = G_train.copy()
+
+    _append_node2vec_features(G_weighted, p=p, q=q,  attr_name=attr_name, dimensions=dimensions)
+    embeddings = nx.get_node_attributes(G_weighted, attr_name)
+    nx.set_node_attributes(G_train, embeddings, attr_name)
+
+    
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
-    'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk")
+    'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
+    'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk")
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):

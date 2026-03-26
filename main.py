@@ -53,9 +53,9 @@ if __name__ == "__main__":
 
     execution_stats = []
                   
-    for sbm_ratio in np.arange(0.0, 1.1, 0.1):
+    for sbm_ratio in np.arange(0.8, 1.1, 0.1):
         
-        G_name = f"artificial_graph_sbmv3_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
+        G_name = f"artificial_graph_sbmv3_shuffled_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
         print("######################################")
         print(f"#### graph {G_name} :  ####")
         print("######################################")
@@ -69,7 +69,7 @@ if __name__ == "__main__":
             print(f"Erreur lors du chargement de {path} : {e}")
 
         start_time = time.time()
-        gp.evaluate(G_name)     
+        gp.execute(G, G_name)     
         end_time = time.time()
         duration = end_time - start_time
 
