@@ -36,7 +36,9 @@ def execute(G, G_name, steps= ["prep", "shap"]):
         save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
         save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
-        exclude = ['u', 'v', 'target', 'label'] 
+        exclude = ['u', 'v', 'target', 'label',
+                 'GT_sbm_id', 'same_GT_sbm', 'GT_pos_dist', 'GT_pos_dist_sq', 
+                 'GT_pos_had_mean', 'GT_pos_had_std', 'GT_pos_cos', 'GT_pos_rank' ] 
         features = [col for col in dataset_train.columns if col not in exclude]
     
         results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)

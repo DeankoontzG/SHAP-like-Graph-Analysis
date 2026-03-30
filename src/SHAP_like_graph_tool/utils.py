@@ -36,9 +36,9 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
-METRICS_NODE = ["pr", "ppr", "lcc", "and", "dc", "katz"]
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk', 'GT_pos']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 'GT_sbm']
+METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -221,6 +221,7 @@ def computeStructureFeatures(G_train):
     alpha_safe = 0.85 / lambda_max
 
     print("Calcul : PageRank, Clustering, Average Neighbor Degree, Degree Centrality, Katz")
+    degree = dict(G_train.degree())
     pr = nx.pagerank(G_train)
     ppr = nx.pagerank(G_train, alpha=0.5)
     lcc = nx.clustering(G_train)
@@ -231,6 +232,7 @@ def computeStructureFeatures(G_train):
 
     for node in G_train.nodes():
         G_train.nodes[node].update({
+            'degree' : degree.get(node, 0),
             'pr': pr.get(node, 0),
             "ppr": ppr.get(node, 0),
             'lcc': lcc.get(node, 0),
