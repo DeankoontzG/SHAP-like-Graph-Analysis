@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 import networkx as nx
 import graph_tool.all as gt
@@ -9,7 +10,7 @@ import joblib
 
 from sklearn.decomposition import PCA
 from scipy.spatial.distance import pdist, squareform
-from scipy.optimize import fsolve
+from scipy.optimize import fsolve, minimize_scalar
 from scipy.stats import ks_2samp 
 
 
@@ -144,11 +145,11 @@ def get_probs_sbm_non_DC(e_rs, b):
             # Calcul du nombre de liens maximum possibles entre ces blocs
             if r == s:
                 possible = counts[r] * (counts[r] - 1) / 2
+                p_rs = e_rs[r, s] / (2*possible)
             else:
                 possible = counts[r] * counts[s]
+                p_rs = e_rs[r, s] / possible
                 
-            p_rs = e_rs[r, s] / possible
-            
             P[np.ix_(idx_r, idx_s)] = p_rs
             if r != s:
                 P[np.ix_(idx_s, idx_r)] = p_rs
@@ -176,7 +177,7 @@ def get_probs_spatial_non_DC(positions, n_liens_target, sigma=1.0):
 
     alpha_opt = fsolve(objective, x0=0.0)[0]
     
-    logit_final = (2 * alpha_opt) - deterrence
+    logit_final = alpha_opt - deterrence
     P = 1.0 / (1.0 + np.exp(-logit_final))
     np.fill_diagonal(P, 0)
     
@@ -198,6 +199,52 @@ def generate_graph_from_probs(P, sbm_groups=None, positions=None):
     g.add_edge_list(edges)
         
     return g
+
+def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, commu, name="00_OUBLI_DE_NOM"):
+    results_list = []
+
+    for alpha in Hybrid_ratios_list:
+        G_name = f"{name}_{f'{alpha:.2f}'.replace('.', '_')}_pos_{f'{1-alpha:.2f}'.replace('.', '_')}.graphml"
+
+        print("\n" + "="*90)
+        print(f"Pour ratio_sbm = {alpha}")
+        print("\n" + "="*90)
+        
+        P_hybride = P_sbm * alpha + P_spatial * (1 - alpha)
+        g_hybride = generate_graph_from_probs(P_hybride)
+
+        g_hybride_nx = convert_to_nx_with_metadata(g_hybride, position, commu)
+        save_as_graphml(g_hybride_nx, filename=G_name)
+
+        node_0_data = g_hybride_nx.nodes[0]
+        print(f"ID SBM : {node_0_data['GT_sbm_id']} (Type: {type(node_0_data['GT_sbm_id'])})")
+        print(f"Position : {node_0_data['GT_pos']}")
+        
+        var_h = get_variance_from_P(P_hybride)
+        ent_h = get_entropy_from_p(P_hybride)
+        ll_h = get_log_likelihood(g_hybride, P_hybride)
+        
+        clustering = gt.global_clustering(g_hybride)[0]  
+        
+        results_list.append({
+            "Modèle": f"Hybride (α={alpha:.2f})",
+            "N": g_hybride.num_vertices(),
+            "E": g_hybride.num_edges(),
+            "Variance": f"{var_h:.8f}",
+            "Entropy": f"{ent_h:.2f}",
+            "Log-Likelihood": f"{ll_h:.2f}",
+            "Clustering": f"{clustering:.4f}"
+        })
+
+    # --- Affichage final ---
+    df_results = pd.DataFrame(results_list)
+
+    print("\n" + "="*90)
+    print("📊 TABLEAU RÉCAPITULATIF DE L'HYBRIDATION")
+    print("="*90)
+    print(df_results)
+    print("="*90)
+
 
 #####################################
 ###### FONCTIONS POUR ANALYSE #######
@@ -320,9 +367,17 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels):
         G_nx.nodes[i]['GT_sbm_id'] = int(sbm_labels[i])
         G_nx.nodes[i]['GT_pos'] = positions[i]
             
+
+    for i in range(n_nodes):
+        G_nx.nodes[i]['GT_sbm_id'] = int(sbm_labels[i])
+        if isinstance(positions[i], (np.ndarray, list)):
+            G_nx.nodes[i]['GT_pos'] = str(list(positions[i]))
+        else:
+            G_nx.nodes[i]['GT_pos'] = str(positions[i])
+    
     return G_nx
 
-def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library"):
+def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="../../graph_library"):
     path = os.path.join(folder, filename)
     nx.write_graphml(G_nx, path)
     print(f"Graphe exporté avec succès dans : {path}")
@@ -366,3 +421,41 @@ def visualize_generation_diagnostics_v2(P_sbm, P_spatial, k_original, e_rs, b_gr
     
     plt.tight_layout()
     plt.show()
+
+def match_spatial_to_sbm_variance(P_sbm, degrees, positions, DC=True):
+    target_variance = get_variance_from_P(P_sbm)
+    target_links = np.sum(degrees) / 2
+    print(f"Variance cible (SBM) : {target_variance:.8f}")
+    print("-" * 30)
+
+    history = {'step': 0}
+
+    def objective(sigma_test):
+        history['step'] += 1
+        
+        if DC : 
+            P_test = get_probs_spatial_DC(degrees, positions, sigma=sigma_test)
+        else : 
+            P_test = get_probs_spatial_non_DC(positions, n_liens_target= target_links,sigma=sigma_test)
+        current_var = get_variance_from_P(P_test)
+        diff = abs(current_var - target_variance)
+        
+        print(f"Step {history['step']:02d} | Sigma testé: {sigma_test:.4f} | Var: {current_var:.8f} | Δ: {diff:.2e}")
+        
+        return (current_var - target_variance)**2
+
+    res = minimize_scalar(objective, bounds=(0.005, 50), method='bounded')
+    
+    print("-" * 30)
+    opt_sigma = res.x
+    
+    if DC : 
+        final_P_spatial = get_probs_spatial_DC(degrees, positions, sigma=opt_sigma)
+    else : 
+        final_P_spatial = get_probs_spatial_non_DC(positions, n_liens_target= target_links, sigma=opt_sigma)
+    final_var = get_variance_from_P(final_P_spatial)
+    
+    print(f"✨ Sigma optimal trouvé : {opt_sigma:.4f}")
+    print(f"📊 Variance finale Spatial : {final_var:.8f} (Écart: {abs(final_var-target_variance):.2e})")
+    
+    return opt_sigma, final_P_spatial
