@@ -360,14 +360,28 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels):
     G_nx = nx.Graph()
     G_nx.add_nodes_from(range(n_nodes))
     G_nx.add_edges_from(edges)
+
+    node_to_sbm = {i: int(sbm_labels[i]) for i in range(n_nodes)}
     
+<<<<<<< Updated upstream
     sbm_dict = {i: int(sbm_labels[i]) for i in range(n_nodes)}
     pos_dict = {i: str(list(positions[i])) for i in range(n_nodes)}
 
     nx.set_node_attributes(G_nx, sbm_dict, "GT_sbm_id")
     nx.set_node_attributes(G_nx, pos_dict, "GT_pos")
+=======
+    node_to_pos = {
+        i: str(list(positions[i])) if isinstance(positions[i], (np.ndarray, list)) else str(positions[i])
+        for i in range(n_nodes)
+    }
+
+    nx.set_node_attributes(G_nx, node_to_sbm, "GT_sbm_id")
+    nx.set_node_attributes(G_nx, node_to_pos, "GT_pos")
+>>>>>>> Stashed changes
     
     return G_nx
+
+
 
 def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="../../graph_library"):
     path = os.path.join(folder, filename)

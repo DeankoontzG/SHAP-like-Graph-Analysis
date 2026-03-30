@@ -368,7 +368,6 @@ COMMUNITY_MAPPING = {
     'leiden': _appendLeidenCommunities,
     'surprise': _appendSurpriseCommunities,
     'significance': _appendSignificanceCommunities
-
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
