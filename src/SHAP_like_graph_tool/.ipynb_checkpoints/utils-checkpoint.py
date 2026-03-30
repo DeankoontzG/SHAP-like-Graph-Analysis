@@ -368,7 +368,6 @@ COMMUNITY_MAPPING = {
     'leiden': _appendLeidenCommunities,
     'surprise': _appendSurpriseCommunities,
     'significance': _appendSignificanceCommunities
-
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
@@ -389,8 +388,14 @@ def prepare_all_densities(G_train):
     Pré-calcule les densités de blocs pour tous les algorithmes.
     """
     all_densities = {}
+    oracle_probs = G_train.graph.get('GT_true_probs', None) # Cas où on traite GroundTruth
     
     for algo in COMMUNITY_ALGOS:
+        if algo == 'GT_sbm' and oracle_probs is not None:
+            all_densities[algo] = oracle_probs
+            print(f"[DEBUG] Oracle injecté pour {algo}")
+            continue
+        
         attr_name = f"{algo}_id"
         node_to_block = nx.get_node_attributes(G_train, attr_name)
         

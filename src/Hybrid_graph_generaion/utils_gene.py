@@ -354,7 +354,7 @@ def analyze_errors(G, P):
     critiques = np.sum(surprises < 1e-4)
     print(f"Nombre d'arêtes 'impossibles' selon le modèle : {critiques}")
 
-def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels):
+def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels, e_rs=None, k=None):
     edges = gt_graph.get_edges()
     n_nodes = len(sbm_labels)
     G_nx = nx.Graph()
@@ -363,21 +363,28 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels):
 
     node_to_sbm = {i: int(sbm_labels[i]) for i in range(n_nodes)}
     
-<<<<<<< Updated upstream
     sbm_dict = {i: int(sbm_labels[i]) for i in range(n_nodes)}
     pos_dict = {i: str(list(positions[i])) for i in range(n_nodes)}
 
     nx.set_node_attributes(G_nx, sbm_dict, "GT_sbm_id")
     nx.set_node_attributes(G_nx, pos_dict, "GT_pos")
-=======
-    node_to_pos = {
-        i: str(list(positions[i])) if isinstance(positions[i], (np.ndarray, list)) else str(positions[i])
-        for i in range(n_nodes)
-    }
 
-    nx.set_node_attributes(G_nx, node_to_sbm, "GT_sbm_id")
-    nx.set_node_attributes(G_nx, node_to_pos, "GT_pos")
->>>>>>> Stashed changes
+    if e_rs is not None and k is not None:
+        true_densities = {}
+        num_blocks = len(k)
+        for r in range(num_blocks):
+            for s in range(r, num_blocks):
+                n_r, n_s = k[r], k[s]
+                links = e_rs[r, s]
+                
+                if r == s:
+                    possible = n_r * (n_r - 1)
+                else:
+                    possible = n_r * n_s
+                
+                true_densities[tuple(sorted((r, s)))] = links / possible if possible > 0 else 0
+        
+        G_nx.graph['GT_true_probs'] = true_densities
     
     return G_nx
 
