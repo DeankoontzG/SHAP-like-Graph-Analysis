@@ -361,19 +361,11 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels):
     G_nx.add_nodes_from(range(n_nodes))
     G_nx.add_edges_from(edges)
     
-    n_dim = positions.shape[1] # Nombre de dimensions PCA
+    sbm_dict = {i: int(sbm_labels[i]) for i in range(n_nodes)}
+    pos_dict = {i: str(list(positions[i])) for i in range(n_nodes)}
 
-    for i in range(n_nodes):
-        G_nx.nodes[i]['GT_sbm_id'] = int(sbm_labels[i])
-        G_nx.nodes[i]['GT_pos'] = positions[i]
-            
-
-    for i in range(n_nodes):
-        G_nx.nodes[i]['GT_sbm_id'] = int(sbm_labels[i])
-        if isinstance(positions[i], (np.ndarray, list)):
-            G_nx.nodes[i]['GT_pos'] = str(list(positions[i]))
-        else:
-            G_nx.nodes[i]['GT_pos'] = str(positions[i])
+    nx.set_node_attributes(G_nx, sbm_dict, "GT_sbm_id")
+    nx.set_node_attributes(G_nx, pos_dict, "GT_pos")
     
     return G_nx
 

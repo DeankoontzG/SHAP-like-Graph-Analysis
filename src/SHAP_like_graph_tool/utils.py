@@ -95,11 +95,11 @@ def hide_graph_links(G, test_size = 0.15):
     # 2. Création du graphe d'entraînement (G sans le test set)
     # C'est sur ce graphe qu'on va tout calculer
     G_train = nx.Graph()
-    G_train.add_nodes_from(G.nodes())
+    G_train.add_nodes_from(G.nodes(data=True))
     G_train.add_edges_from(train_edges)
 
     G_eval = nx.Graph()
-    G_eval.add_nodes_from(G.nodes())
+    G_eval.add_nodes_from(G.nodes(data=True))
     G_eval.add_edges_from(test_edges)
     
     print(f"Graphe original: {G.number_of_edges()} liens")
@@ -143,6 +143,9 @@ def _extract_pair_features(G_train, u, v, densities):
     for algo in COMMUNITY_ALGOS:
         id_u = nu.get(f'{algo}_id')
         id_v = nv.get(f'{algo}_id')
+        if id_u is None or id_v is None:
+            print(f"ALERTE : Noeud u={u} ou v={v} a un ID None pour {algo} !")
+            print(f"DEBUG: Attr cherché: {algo}_id | Présents dans nu: {list(nu.keys())}")
         pair = tuple(sorted((id_u, id_v)))
 
         features[f'{algo}_density'] = densities[algo].get(pair, 0)

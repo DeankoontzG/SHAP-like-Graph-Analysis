@@ -4,6 +4,7 @@ import src.SHAP_like_graph_tool.utils as gput
 import networkx as nx
 import html
 import io
+import ast
 import json
 import numpy as np
 import pandas as pd
@@ -45,6 +46,10 @@ def load_graphml_safe(path):
 
         clean_data = html.unescape(raw_data)
         G = nx.read_graphml(io.StringIO(clean_data))
+
+        for n, data in G.nodes(data=True):
+            if 'GT_pos' in data and isinstance(data['GT_pos'], str):
+                data['GT_pos'] = np.array(ast.literal_eval(data['GT_pos']))
         
         print(f"✅ Graphe chargé : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
         return G
@@ -53,9 +58,9 @@ if __name__ == "__main__":
 
     execution_stats = []
                   
-    for sbm_ratio in np.arange(0.8, 1.1, 0.1):
+    for sbm_ratio in np.arange(0.00, 1.25, 0.25):
         
-        G_name = f"artificial_graph_sbmv3_shuffled_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
+        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
         print("######################################")
         print(f"#### graph {G_name} :  ####")
         print("######################################")
