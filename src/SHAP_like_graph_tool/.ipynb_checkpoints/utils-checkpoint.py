@@ -172,7 +172,7 @@ def _worker_extract(u, v, target, G_train, densities):
 
     return {'u': u, 'v': v, 'target': target, **features}
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, n_jobs=-2):
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, P_matrix = None, n_jobs=-2):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
@@ -211,6 +211,12 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, n_jobs=-2):
     for emb in EMBEDDINGS:
         dist_col = f'{emb}_dist'
         df[f'{emb}_rank'] = df[dist_col].rank(pct=True)
+        
+    if P_matrix is not None:
+        print("Injection de la Ground Truth (P_matrice) dans le DataFrame...")
+        indices_u = df['u'].values.astype(int)
+        indices_v = df['v'].values.astype(int)
+        df['GT_proba'] = P_matrix[indices_u, indices_v]
 
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
@@ -614,9 +620,9 @@ def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, graph_name="G_NAME"):
+def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, P_matrix =None, graph_name="G_NAME"):
     
-    folds_data = _prepare_precalculated_folds(G, k=k)
+    folds_data = _prepare_precalculated_folds(G, k=k, P_matrix=P_matrix)
     study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
     
     results = []
@@ -655,7 +661,7 @@ def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, graph_name=
     
     return best_params, summary_df
 
-def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data):
+def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None):
     print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
     # Construction du graphe kept
     kept_edges = [edges[i] for i in t_idx]
@@ -683,12 +689,12 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data):
     G_kept = computeDistanceFeatures(G_kept)
 
     # Création des datasets
-    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0) 
-    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0)
+    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0, P_matrix=P_matrix) 
+    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0, P_matrix=P_matrix)
     
     return (ds_train, ds_val)
 
-def _prepare_precalculated_folds(G, k=1):
+def _prepare_precalculated_folds(G, k=1, P_matrix = None):
     edges = list(G.edges())
     nodes_data = list(G.nodes(data=True)) 
 
@@ -702,7 +708,7 @@ def _prepare_precalculated_folds(G, k=1):
 
     # Anciennement //isé, plus efficace comme ça pour éviter //isations imbriquées.
     precalculated_folds = [
-        _process_single_fold(i, t_idx, v_idx, edges, nodes_data)
+        _process_single_fold(i, t_idx, v_idx, edges, nodes_data, P_matrix=P_matrix)
         for i, (t_idx, v_idx) in enumerate(folds_idx)
     ]
     

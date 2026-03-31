@@ -3,7 +3,7 @@ from .models import *
 import matplotlib.pyplot as plt
 import numpy as np
     
-def execute(G, G_name, steps= ["prep", "shap"]): 
+def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]): 
 
     if 'prep' in steps:
         validate_input_graph(G)
@@ -14,7 +14,14 @@ def execute(G, G_name, steps= ["prep", "shap"]):
         loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_kept}", mode="save")
     
         print("Lacement du k-fold cross validation...")
-        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, graph_name= G_name)
+        if 'P_matrix' in G.graph and add_P_matrix:        # Cas où on souhaite injecter la proba GT dans le graphe
+            matrix_list = json.loads(G.graph['P_matrix'])
+            P_matrix = np.array(matrix_list, dtype=float)        
+            print(f"Matrice P récupérée avec succès pour la GT (Format: {P_matrix.shape})")
+        else :
+            print(f"Pas de P_Matrix à récupérer : {add_P_matrix}")
+            P_matrix = None
+        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, P_matrix= P_matrix, graph_name= G_name)
         print(best_params)
 
         G_train_with_structure = computeStructureFeatures(G_train)
@@ -37,8 +44,9 @@ def execute(G, G_name, steps= ["prep", "shap"]):
         save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
         exclude = ['u', 'v', 'target', 'label',
-                 'GT_sbm_id', 'same_GT_sbm', 'GT_pos_dist', 'GT_pos_dist_sq', 
-                 'GT_pos_had_mean', 'GT_pos_had_std', 'GT_pos_cos', 'GT_pos_rank' ] 
+                 #'GT_sbm_id', 'same_GT_sbm', 'GT_pos_dist', 'GT_pos_dist_sq', 
+                 #'GT_pos_had_mean', 'GT_pos_had_std', 'GT_pos_cos', 'GT_pos_rank' 
+                  ] 
         features = [col for col in dataset_train.columns if col not in exclude]
     
         results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)

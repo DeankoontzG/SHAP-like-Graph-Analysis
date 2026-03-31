@@ -53,11 +53,16 @@ def load_graphml_safe(path):
         
         print(f"✅ Graphe chargé : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
         return G
+    
+def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library"):
+    path = os.path.join(folder, filename)
+    nx.write_graphml(G_nx, path)
+    print(f"Graphe exporté avec succès dans : {path}")
 
 if __name__ == "__main__":
 
     execution_stats = []
-                  
+
     for sbm_ratio in np.arange(0.00, 1.25, 0.25):
         
         G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
@@ -74,7 +79,7 @@ if __name__ == "__main__":
             print(f"Erreur lors du chargement de {path} : {e}")
 
         start_time = time.time()
-        gp.execute(G, G_name)     
+        gp.execute(G, G_name, add_P_matrix = True)                
         end_time = time.time()
         duration = end_time - start_time
 
@@ -88,6 +93,7 @@ if __name__ == "__main__":
             })
             
         print(f"⏱️ Terminé en {duration:.2f} secondes.")
+
 
     df = pd.DataFrame(execution_stats)
     print("\n" + "="*50)
