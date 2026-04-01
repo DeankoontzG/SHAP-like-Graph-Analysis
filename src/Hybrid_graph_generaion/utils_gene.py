@@ -157,6 +157,7 @@ def get_probs_sbm_non_DC(e_rs, b):
             P[np.ix_(idx_r, idx_s)] = p_rs
             if r != s:
                 P[np.ix_(idx_s, idx_r)] = p_rs
+
                 
     np.fill_diagonal(P, 0)
     n_clipped = np.sum(P > 1.0)
@@ -323,6 +324,7 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels, e_rs, Probas_mt
     true_densities = {}
     num_blocks = e_rs.shape[0]
     counts = Counter(sbm_labels)
+    
     for r in range(num_blocks):
         for s in range(r, num_blocks):
             n_r = counts[r]
@@ -330,11 +332,13 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels, e_rs, Probas_mt
             links = e_rs[r, s]
             
             if r == s:
-                possible = n_r * (n_r - 1)
+                possible_pairs = n_r * (n_r - 1) / 2
+                density = links / (2 * possible_pairs) if possible_pairs > 0 else 0
             else:
-                possible = n_r * n_s
+                possible_pairs = n_r * n_s
+                density = links / possible_pairs if possible_pairs > 0 else 0
             
-            true_densities[tuple(sorted((r, s)))] = links / possible if possible > 0 else 0
+            true_densities[tuple(sorted((r, s)))] = density
 
     serializable_densities = {f"{k[0]}-{k[1]}": v for k, v in true_densities.items()}
     G_nx.graph['GT_true_probs'] = json.dumps(serializable_densities)
@@ -345,6 +349,46 @@ def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels, e_rs, Probas_mt
             print(f"SUCCESS : P_hybrid_matrix ajoutée au graphe ({Probas_mtx.shape})")
         else:
             print("ERROR : Échec de l'ajout de P_hybrid_matrix !")
+
+    # --- SANITY CHECK MASSIF (200 paires) ---
+    if Probas_mtx is not None:
+        import random
+        n_tests = min(200, n_nodes * (n_nodes - 1) // 2)
+        error_count = 0
+        max_diff = 0
+        
+        # On génère des paires aléatoires uniques
+        sampled_pairs = set()
+        while len(sampled_pairs) < n_tests:
+            u, v = random.sample(range(n_nodes), 2)
+            sampled_pairs.add(tuple(sorted((u, v))))
+
+        for u, v in sampled_pairs:
+            r, s = int(sbm_labels[u]), int(sbm_labels[v])
+            
+            # 1. Valeur recalculée via true_densities
+            key = f"{min(r, s)}-{max(r, s)}" # Format string comme dans ton json
+            val_recalculee = true_densities[tuple(sorted((r, s)))]
+            
+            # 2. Valeur lue dans la matrice de génération P
+            val_P = Probas_mtx[u, v]
+            
+            # Comparaison
+            diff = abs(val_recalculee - val_P)
+            max_diff = max(max_diff, diff)
+            
+            if diff > 1e-9:
+                error_count += 1
+                if error_count <= 5: # On affiche les 5 premières erreurs seulement
+                    print(f"   ⚠️ Erreur Paire({u},{v}) | Blocs {r}-{s}: Recalc={val_recalculee:.6f} vs P={val_P:.6f}")
+
+        print(f"\n--- RÉSULTAT DU CHECK ({n_tests} paires) ---")
+        if error_count == 0:
+            print(f"✅ 100% COHÉRENT : Les {n_tests} paires matchent parfaitement.")
+        else:
+            print(f"❌ INCOHÉRENCE : {error_count}/{n_tests} erreurs détectées.")
+            print(f"❌ Différence maximale constatée : {max_diff:.10f}")
+        print("-" * 40)
     
     return G_nx
 

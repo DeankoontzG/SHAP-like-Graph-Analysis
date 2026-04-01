@@ -35,8 +35,8 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
         loadsave_data_joblib(data=G_kept_with_distances, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
     
-        dataset_train = prepare_balanced_data(G_test, G_train_with_distances,  negative_ratio=10.0)
-        dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_distances, negative_ratio=50.0)
+        dataset_train = prepare_balanced_data(G_test, G_train_with_distances,  negative_ratio=10.0, P_matrix=P_matrix)
+        dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_distances, negative_ratio=50.0, P_matrix=P_matrix)
     
         print("Vérif : colonnes du dataset :")
         print(dataset_train.columns)

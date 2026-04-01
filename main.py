@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
     execution_stats = []
 
-    for sbm_ratio in np.arange(0.00, 1.25, 0.25):
+    for sbm_ratio in np.arange(1.00, -0.25, -0.25):
         
         G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
         print("######################################")
@@ -78,6 +78,8 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Erreur lors du chargement de {path} : {e}")
 
+        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_')         
+        
         start_time = time.time()
         gp.execute(G, G_name, add_P_matrix = True)                
         end_time = time.time()

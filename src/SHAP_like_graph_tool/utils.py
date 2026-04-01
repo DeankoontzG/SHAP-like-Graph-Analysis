@@ -97,10 +97,12 @@ def hide_graph_links(G, test_size = 0.15):
     G_train = nx.Graph()
     G_train.add_nodes_from(G.nodes(data=True))
     G_train.add_edges_from(train_edges)
+    G_train.graph.update(G.graph) #Les métadonnées, type GT
 
     G_eval = nx.Graph()
     G_eval.add_nodes_from(G.nodes(data=True))
     G_eval.add_edges_from(test_edges)
+    G_eval.graph.update(G.graph) #Les métadonnées, type GT
     
     print(f"Graphe original: {G.number_of_edges()} liens")
     print(f"Graphe d'entraînement: {G_train.number_of_edges()} liens")
@@ -394,12 +396,18 @@ def prepare_all_densities(G_train):
     Pré-calcule les densités de blocs pour tous les algorithmes.
     """
     all_densities = {}
-    oracle_probs = G_train.graph.get('GT_true_probs', None) # Cas où on traite GroundTruth
+    oracle_probs_json = G_train.graph.get('GT_true_probs', None) # Cas où on traite GroundTruth
     
     for algo in COMMUNITY_ALGOS:
-        if algo == 'GT_sbm' and oracle_probs is not None:
+        if algo == 'GT_sbm' and oracle_probs_json is not None:
+            raw_data = json.loads(oracle_probs_json) 
+            oracle_probs = {}
+            for key, val in raw_data.items():
+                b1, b2 = map(int, key.split('-'))
+                oracle_probs[(b1, b2)] = val
+                
             all_densities[algo] = oracle_probs
-            print(f"[DEBUG] Oracle injecté pour {algo}")
+            print(f"[DEBUG] Probas théoriques SBM injectées et formatées pour {algo}")
             continue
         
         attr_name = f"{algo}_id"
@@ -661,13 +669,15 @@ def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, P_matrix =N
     
     return best_params, summary_df
 
-def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None):
+def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None, global_attr=None):
     print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
     # Construction du graphe kept
     kept_edges = [edges[i] for i in t_idx]
     G_kept = nx.Graph()
     G_kept.add_nodes_from(nodes_data)
     G_kept.add_edges_from(kept_edges)
+    if global_attr:
+        G_kept.graph.update(global_attr)
 
     # Séparation en graphe de train/test
     G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
@@ -677,6 +687,8 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None):
     G_hidden = nx.Graph()
     G_hidden.add_nodes_from(nodes_data)
     G_hidden.add_edges_from(hidden_edges)
+    if global_attr:
+        G_hidden.graph.update(global_attr)
 
     # Enrichissement du graphe de train
     G_train = computeStructureFeatures(G_train)
@@ -696,7 +708,8 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None):
 
 def _prepare_precalculated_folds(G, k=1, P_matrix = None):
     edges = list(G.edges())
-    nodes_data = list(G.nodes(data=True)) 
+    nodes_data = list(G.nodes(data=True))
+    global_metadata = dict(G.graph)
 
     if k == 1:
         folds_idx = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
@@ -708,7 +721,7 @@ def _prepare_precalculated_folds(G, k=1, P_matrix = None):
 
     # Anciennement //isé, plus efficace comme ça pour éviter //isations imbriquées.
     precalculated_folds = [
-        _process_single_fold(i, t_idx, v_idx, edges, nodes_data, P_matrix=P_matrix)
+        _process_single_fold(i, t_idx, v_idx, edges, nodes_data, P_matrix=P_matrix, global_attr=global_metadata)
         for i, (t_idx, v_idx) in enumerate(folds_idx)
     ]
     
