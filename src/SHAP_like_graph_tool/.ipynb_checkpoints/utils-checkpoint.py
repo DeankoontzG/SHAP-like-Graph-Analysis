@@ -36,8 +36,8 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk', 'GT_pos']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 'GT_sbm']
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -97,12 +97,12 @@ def hide_graph_links(G, test_size = 0.15):
     G_train = nx.Graph()
     G_train.add_nodes_from(G.nodes(data=True))
     G_train.add_edges_from(train_edges)
-    G_train.graph.update(G.graph) #Les métadonnées, type GT
+    G_train.graph.update(G.graph)
 
     G_eval = nx.Graph()
     G_eval.add_nodes_from(G.nodes(data=True))
     G_eval.add_edges_from(test_edges)
-    G_eval.graph.update(G.graph) #Les métadonnées, type GT
+    G_eval.graph.update(G.graph)
     
     print(f"Graphe original: {G.number_of_edges()} liens")
     print(f"Graphe d'entraînement: {G_train.number_of_edges()} liens")
@@ -174,7 +174,7 @@ def _worker_extract(u, v, target, G_train, densities):
 
     return {'u': u, 'v': v, 'target': target, **features}
 
-def prepare_balanced_data(G, G_train, negative_ratio=10.0, P_matrix = None, n_jobs=-2):
+def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n_jobs=-2):
     """
     Prépare le dataset final en utilisant G_train pour les features
     et G pour vérifier l'existence réelle des liens (target).
@@ -214,11 +214,42 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, P_matrix = None, n_jo
         dist_col = f'{emb}_dist'
         df[f'{emb}_rank'] = df[dist_col].rank(pct=True)
         
-    if P_matrix is not None:
-        print("Injection de la Ground Truth (P_matrice) dans le DataFrame...")
+    if GroundTruth is not None:
+        print(f"Injection de la Ground Truth ({len(GroundTruth)} sources)...")
         indices_u = df['u'].values.astype(int)
         indices_v = df['v'].values.astype(int)
-        df['GT_proba'] = P_matrix[indices_u, indices_v]
+        
+        for feat_name, data in GroundTruth.items():
+            # Cas spécifiques (nominatifs) 
+            if feat_name == 'GT_pos':
+                pos_u = data[indices_u]
+                pos_v = data[indices_v]
+                df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
+                
+                deg_spatial = GroundTruth.get('GT_degrees_spatial')
+                if deg_spatial is not None :
+                    ku = deg_spatial[indices_u]
+                    kv = deg_spatial[indices_v]
+                    df['GT_degrees_spatial_u'] = ku
+                    df['GT_degrees_spatial_v'] = kv
+                    df['GT_spatial_deg_product'] = ku * kv
+                    #df['GT_spatial_gravity_log'] = (np.log(ku + 1e-5) + np.log(kv + 1e-5) - np.log(df['GT_pos_dist'] + 1e-6))
+            
+            elif feat_name == 'GT_sbm_matrix':
+                ids_u = GroundTruth['GT_sbm_id'][indices_u]
+                ids_v = GroundTruth['GT_sbm_id'][indices_v]
+                df['GT_sbm_density'] = data[ids_u, ids_v]
+                
+            # Cas 1 : Matrice de Paires (N x N)
+            elif isinstance(data, np.ndarray) and data.ndim == 2 and data.shape[0]==data.shape[1] and data.shape[0] > 100: 
+                df[feat_name] = data[indices_u, indices_v]
+
+            # Cas 2 : Vecteurs de Nœuds (N,) -> Ex: GT_degrees_sbm, GT_degrees_spatial
+            elif isinstance(data, np.ndarray) and data.ndim == 1:
+                df[f"{feat_name}_u"] = data[indices_u]
+                df[f"{feat_name}_v"] = data[indices_v]
+
+        print(f"DataFrame enrichi. Colonnes GT : {[c for c in df.columns if c.startswith('GT_')]}")
 
     print(f"DataFrame créé avec succès : {df.shape[0]} lignes.")
     return df
@@ -396,20 +427,8 @@ def prepare_all_densities(G_train):
     Pré-calcule les densités de blocs pour tous les algorithmes.
     """
     all_densities = {}
-    oracle_probs_json = G_train.graph.get('GT_true_probs', None) # Cas où on traite GroundTruth
     
-    for algo in COMMUNITY_ALGOS:
-        if algo == 'GT_sbm' and oracle_probs_json is not None:
-            raw_data = json.loads(oracle_probs_json) 
-            oracle_probs = {}
-            for key, val in raw_data.items():
-                b1, b2 = map(int, key.split('-'))
-                oracle_probs[(b1, b2)] = val
-                
-            all_densities[algo] = oracle_probs
-            print(f"[DEBUG] Probas théoriques SBM injectées et formatées pour {algo}")
-            continue
-        
+    for algo in COMMUNITY_ALGOS:        
         attr_name = f"{algo}_id"
         node_to_block = nx.get_node_attributes(G_train, attr_name)
         
@@ -597,40 +616,14 @@ def computeDistanceFeatures(G_train, embeddings="All"):
             print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
     return G_train
 
-def enrich_dataset_with_ground_truth(df, G, p_intra = 7517986, q_inter = 0.0002 ):
-    """
-    Ajoute les infos réelles de position et block du graphe initial, pour les graphes générés artificiellement.
-    """
-    pos_dict = nx.get_node_attributes(G, 'pos')
-    block_dict = nx.get_node_attributes(G, 'block')
-
-    df['block_reel_u'] = df['u'].map(block_dict)
-    df['block_reel_v'] = df['v'].map(block_dict)
-    df['same_block_reel'] = (df['block_reel_u'] == df['block_reel_v']).astype(int)
-
-    df['proba_lien_reelle'] = np.where(df['same_block_reel'] == 1, p_intra, q_inter)
-
-
-    def calculate_dist(row):
-        u, v = row['u'], row['v']
-        if u in pos_dict and v in pos_dict:
-            p1 = np.array(pos_dict[u])
-            p2 = np.array(pos_dict[v])
-            return np.linalg.norm(p1 - p2)
-        return None
-
-    print("Calcul des distances réelles...")
-    df['dist_reelle'] = df.apply(calculate_dist, axis=1)
-
-    return df
 
 #################################################
 ######### FONCTIONS DE CROSS VALIDATION #########
 #################################################
 
-def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, P_matrix =None, graph_name="G_NAME"):
+def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, GroundTruth =None, graph_name="G_NAME"):
     
-    folds_data = _prepare_precalculated_folds(G, k=k, P_matrix=P_matrix)
+    folds_data = _prepare_precalculated_folds(G, k=k, GroundTruth=GroundTruth)
     study = _run_optuna_tuning(folds_data, features_list, n_trials=n_trials)
     
     results = []
@@ -669,15 +662,13 @@ def k_fold_cross_validation(G, k=2, features_list=None, n_trials=50, P_matrix =N
     
     return best_params, summary_df
 
-def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None, global_attr=None):
+def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, GroundTruth=None):
     print(f"--- Démarrage Parallèle Fold {f_idx + 1} ---")
     # Construction du graphe kept
     kept_edges = [edges[i] for i in t_idx]
     G_kept = nx.Graph()
     G_kept.add_nodes_from(nodes_data)
     G_kept.add_edges_from(kept_edges)
-    if global_attr:
-        G_kept.graph.update(global_attr)
 
     # Séparation en graphe de train/test
     G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
@@ -687,8 +678,6 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None, 
     G_hidden = nx.Graph()
     G_hidden.add_nodes_from(nodes_data)
     G_hidden.add_edges_from(hidden_edges)
-    if global_attr:
-        G_hidden.graph.update(global_attr)
 
     # Enrichissement du graphe de train
     G_train = computeStructureFeatures(G_train)
@@ -701,15 +690,14 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, P_matrix=None, 
     G_kept = computeDistanceFeatures(G_kept)
 
     # Création des datasets
-    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0, P_matrix=P_matrix) 
-    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0, P_matrix=P_matrix)
+    ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0, GroundTruth=GroundTruth) 
+    ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0, GroundTruth=GroundTruth)
     
     return (ds_train, ds_val)
 
-def _prepare_precalculated_folds(G, k=1, P_matrix = None):
+def _prepare_precalculated_folds(G, k=1, GroundTruth = None):
     edges = list(G.edges())
     nodes_data = list(G.nodes(data=True))
-    global_metadata = dict(G.graph)
 
     if k == 1:
         folds_idx = [train_test_split(range(len(edges)), test_size=0.2, random_state=42)]
@@ -721,7 +709,7 @@ def _prepare_precalculated_folds(G, k=1, P_matrix = None):
 
     # Anciennement //isé, plus efficace comme ça pour éviter //isations imbriquées.
     precalculated_folds = [
-        _process_single_fold(i, t_idx, v_idx, edges, nodes_data, P_matrix=P_matrix, global_attr=global_metadata)
+        _process_single_fold(i, t_idx, v_idx, edges, nodes_data, GroundTruth=GroundTruth)
         for i, (t_idx, v_idx) in enumerate(folds_idx)
     ]
     

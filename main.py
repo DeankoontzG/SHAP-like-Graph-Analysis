@@ -65,7 +65,7 @@ if __name__ == "__main__":
 
     for sbm_ratio in np.arange(1.00, -0.25, -0.25):
         
-        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
+        G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')         
         print("######################################")
         print(f"#### graph {G_name} :  ####")
         print("######################################")
@@ -77,8 +77,46 @@ if __name__ == "__main__":
             print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
         except Exception as e:
             print(f"Erreur lors du chargement de {path} : {e}")
+        
+        start_time = time.time()
+        gp.execute(G, G_name, add_P_matrix = True)                
+        end_time = time.time()
+        duration = end_time - start_time
 
-        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_')         
+        execution_stats.append({
+                "Graph": G_name,
+                "Nodes": G.number_of_nodes(),
+                "Edges": G.number_of_edges(),
+                "Time_sec": round(duration, 2),
+                "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
+                "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
+            })
+            
+        print(f"⏱️ Terminé en {duration:.2f} secondes.")
+
+
+    df = pd.DataFrame(execution_stats)
+    print("\n" + "="*50)
+    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("="*50)
+    print(df.to_string(index=False))
+
+    execution_stats = []
+
+    for sbm_ratio in np.arange(1.00, -0.25, -0.25):
+        
+        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_') 
+        print("######################################")
+        print(f"#### graph {G_name} :  ####")
+        print("######################################")
+        
+        path = f"graph_library/{G_name}.graphml"
+        
+        try:
+            G = load_graphml_safe(path)
+            print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+        except Exception as e:
+            print(f"Erreur lors du chargement de {path} : {e}")
         
         start_time = time.time()
         gp.execute(G, G_name, add_P_matrix = True)                

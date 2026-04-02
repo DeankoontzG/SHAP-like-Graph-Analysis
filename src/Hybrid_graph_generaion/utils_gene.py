@@ -73,7 +73,7 @@ def get_real_graph_properties_pos_V2(G_train, n_components=4, shuffle=True):
         idx_deg = rng_deg.permutation(len(degrees))
         degrees_final = np.array(degrees)[idx_deg]
     else:
-        degrees_final = pos_normalized
+        degrees_final = degrees
         
     return degrees_final, pos_final
 
@@ -132,7 +132,7 @@ def get_probs_spatial_DC(degrees, positions, sigma=1.0, iterations=4000, lr=0.2)
     mae_deg = np.mean(np.abs(P.sum(axis=1) - degrees))
     print(f"Erreur moyenne sur les degrés (MAE) : {mae_deg:.6f}")
         
-    return P
+    return P, alpha
 
 def get_probs_sbm_non_DC(e_rs, b):
     n = len(b)
@@ -205,7 +205,7 @@ def generate_graph_from_probs(P, sbm_groups=None, positions=None):
         
     return g
 
-def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False):
+def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False):
     results_list = []
 
     for alpha in Hybrid_ratios_list:
@@ -219,15 +219,11 @@ def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, co
         g_hybride = generate_graph_from_probs(P_hybride)
 
         if save_P_matrix : 
-            g_hybride_nx = convert_to_nx_with_metadata(g_hybride, position, commu, e_rs, P_hybride)
+            g_hybride_nx = convert_to_nx_with_metadata(g_hybride, position, k, degrees, commu, e_rs, P_hybride)
         else:  
-            g_hybride_nx = convert_to_nx_with_metadata(g_hybride, position, commu, e_rs)
+            g_hybride_nx = convert_to_nx_with_metadata(g_hybride, position, k, degrees, commu, e_rs)
 
         save_as_graphml(g_hybride_nx, filename=G_name)
-
-        node_0_data = g_hybride_nx.nodes[0]
-        print(f"ID SBM : {node_0_data['GT_sbm_id']} (Type: {type(node_0_data['GT_sbm_id'])})")
-        print(f"Position : {node_0_data['GT_pos']}")
         
         var_h = get_variance_from_P(P_hybride)
         ent_h = get_entropy_from_p(P_hybride)
@@ -308,88 +304,45 @@ def analyze_errors(G, P):
     critiques = np.sum(surprises < 1e-4)
     print(f"Nombre d'arêtes 'impossibles' selon le modèle : {critiques}")
 
-def convert_to_nx_with_metadata(gt_graph, positions, sbm_labels, e_rs, Probas_mtx = None):
+def convert_to_nx_with_metadata(gt_graph, positions, k, degrees, sbm_labels, e_rs, Probas_mtx=None):
     edges = gt_graph.get_edges()
     n_nodes = len(sbm_labels)
     G_nx = nx.Graph()
     G_nx.add_nodes_from(range(n_nodes))
     G_nx.add_edges_from(edges)
     
-    sbm_dict = {i: int(sbm_labels[i]) for i in range(n_nodes)}
-    pos_dict = {i: str(list(positions[i])) for i in range(n_nodes)}
+    gt_payload = {
+        'GT_degrees_sbm': k.tolist() if hasattr(k, 'tolist') else list(k),
+        'GT_degrees_spatial': degrees.tolist() if hasattr(degrees, 'tolist') else list(degrees),
+        'GT_pos': positions.tolist() if hasattr(positions, 'tolist') else list(positions),
+        'GT_sbm_id': [int(x) for x in sbm_labels],
+    }
 
-    nx.set_node_attributes(G_nx, sbm_dict, "GT_sbm_id")
-    nx.set_node_attributes(G_nx, pos_dict, "GT_pos")
-
-    true_densities = {}
     num_blocks = e_rs.shape[0]
     counts = Counter(sbm_labels)
+    sbm_density_matrix = np.zeros((num_blocks, num_blocks))
     
     for r in range(num_blocks):
         for s in range(r, num_blocks):
-            n_r = counts[r]
-            n_s = counts[s]
+            n_r, n_s = counts[r], counts[s]
             links = e_rs[r, s]
-            
             if r == s:
-                possible_pairs = n_r * (n_r - 1) / 2
-                density = links / (2 * possible_pairs) if possible_pairs > 0 else 0
+                possible = n_r * (n_r - 1) / 2
+                dens = links / (2 * possible) if possible > 0 else 0
             else:
-                possible_pairs = n_r * n_s
-                density = links / possible_pairs if possible_pairs > 0 else 0
+                possible = n_r * n_s
+                dens = links / possible if possible > 0 else 0
             
-            true_densities[tuple(sorted((r, s)))] = density
-
-    serializable_densities = {f"{k[0]}-{k[1]}": v for k, v in true_densities.items()}
-    G_nx.graph['GT_true_probs'] = json.dumps(serializable_densities)
-
-    if Probas_mtx is not None:
-        G_nx.graph['P_matrix'] = json.dumps(Probas_mtx.tolist())
-        if 'P_hybrid_matrix' in G_nx.graph:
-            print(f"SUCCESS : P_hybrid_matrix ajoutée au graphe ({Probas_mtx.shape})")
-        else:
-            print("ERROR : Échec de l'ajout de P_hybrid_matrix !")
-
-    # --- SANITY CHECK MASSIF (200 paires) ---
-    if Probas_mtx is not None:
-        import random
-        n_tests = min(200, n_nodes * (n_nodes - 1) // 2)
-        error_count = 0
-        max_diff = 0
-        
-        # On génère des paires aléatoires uniques
-        sampled_pairs = set()
-        while len(sampled_pairs) < n_tests:
-            u, v = random.sample(range(n_nodes), 2)
-            sampled_pairs.add(tuple(sorted((u, v))))
-
-        for u, v in sampled_pairs:
-            r, s = int(sbm_labels[u]), int(sbm_labels[v])
-            
-            # 1. Valeur recalculée via true_densities
-            key = f"{min(r, s)}-{max(r, s)}" # Format string comme dans ton json
-            val_recalculee = true_densities[tuple(sorted((r, s)))]
-            
-            # 2. Valeur lue dans la matrice de génération P
-            val_P = Probas_mtx[u, v]
-            
-            # Comparaison
-            diff = abs(val_recalculee - val_P)
-            max_diff = max(max_diff, diff)
-            
-            if diff > 1e-9:
-                error_count += 1
-                if error_count <= 5: # On affiche les 5 premières erreurs seulement
-                    print(f"   ⚠️ Erreur Paire({u},{v}) | Blocs {r}-{s}: Recalc={val_recalculee:.6f} vs P={val_P:.6f}")
-
-        print(f"\n--- RÉSULTAT DU CHECK ({n_tests} paires) ---")
-        if error_count == 0:
-            print(f"✅ 100% COHÉRENT : Les {n_tests} paires matchent parfaitement.")
-        else:
-            print(f"❌ INCOHÉRENCE : {error_count}/{n_tests} erreurs détectées.")
-            print(f"❌ Différence maximale constatée : {max_diff:.10f}")
-        print("-" * 40)
+            sbm_density_matrix[r, s] = dens
+            sbm_density_matrix[s, r] = dens
     
+    gt_payload['GT_sbm_matrix'] = sbm_density_matrix.tolist()
+
+
+    G_nx.graph['GroundTruth_JSON'] = json.dumps(gt_payload)
+    if Probas_mtx is not None:
+        G_nx.graph['P_matrix_JSON'] = json.dumps(Probas_mtx.tolist())
+
     return G_nx
 
 
@@ -421,7 +374,7 @@ def match_spatial_to_sbm_variance(P_sbm, degrees, positions, DC=True):
         history['step'] += 1
         
         if DC : 
-            P_test = get_probs_spatial_DC(degrees, positions, sigma=sigma_test)
+            P_test, alphas = get_probs_spatial_DC(degrees, positions, sigma=sigma_test)
         else : 
             P_test = get_probs_spatial_non_DC(positions, n_liens_target= target_links,sigma=sigma_test)
         current_var = get_variance_from_P(P_test)
@@ -437,7 +390,7 @@ def match_spatial_to_sbm_variance(P_sbm, degrees, positions, DC=True):
     opt_sigma = res.x
     
     if DC : 
-        final_P_spatial = get_probs_spatial_DC(degrees, positions, sigma=opt_sigma)
+        final_P_spatial, alphas = get_probs_spatial_DC(degrees, positions, sigma=opt_sigma)
     else : 
         final_P_spatial = get_probs_spatial_non_DC(positions, n_liens_target= target_links, sigma=opt_sigma)
     final_var = get_variance_from_P(final_P_spatial)

@@ -8,20 +8,30 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
     if 'prep' in steps:
         validate_input_graph(G)
         print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
-        
+
+        if 'GroundTruth_JSON' in G.graph:
+            print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
+            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
+            
+            GT = {'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
+                'GT_pos': np.array(gt_raw['GT_pos']),
+                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
+                'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']),
+                'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial'])
+                 }
+            
+            if 'P_matrix_JSON' in G.graph:
+                print("P_matrix trouvée.")
+                GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
+        else:
+            print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
+            GT = None
+            
         G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
         G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
         loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_kept}", mode="save")
     
-        print("Lacement du k-fold cross validation...")
-        if 'P_matrix' in G.graph and add_P_matrix:        # Cas où on souhaite injecter la proba GT dans le graphe
-            matrix_list = json.loads(G.graph['P_matrix'])
-            P_matrix = np.array(matrix_list, dtype=float)        
-            print(f"Matrice P récupérée avec succès pour la GT (Format: {P_matrix.shape})")
-        else :
-            print(f"Pas de P_Matrix à récupérer : {add_P_matrix}")
-            P_matrix = None
-        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, P_matrix= P_matrix, graph_name= G_name)
+        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, GroundTruth=GT, graph_name= G_name)
         print(best_params)
 
         G_train_with_structure = computeStructureFeatures(G_train)
@@ -35,19 +45,20 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
         loadsave_data_joblib(data=G_kept_with_distances, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
     
-        dataset_train = prepare_balanced_data(G_test, G_train_with_distances,  negative_ratio=10.0, P_matrix=P_matrix)
-        dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_distances, negative_ratio=50.0, P_matrix=P_matrix)
+        dataset_train = prepare_balanced_data(G_test, G_train_with_distances,  negative_ratio=10.0, GroundTruth=GT,)
+        dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_distances, negative_ratio=50.0, GroundTruth=GT,)
     
         print("Vérif : colonnes du dataset :")
         print(dataset_train.columns)
         save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
         save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
-        exclude = ['u', 'v', 'target', 'label',
-                 #'GT_sbm_id', 'same_GT_sbm', 'GT_pos_dist', 'GT_pos_dist_sq', 
-                 #'GT_pos_had_mean', 'GT_pos_had_std', 'GT_pos_cos', 'GT_pos_rank' 
-                  ] 
-        features = [col for col in dataset_train.columns if col not in exclude]
+        exclude = ['u', 'v', 'target', 'label'] 
+        features = [
+            col for col in dataset_train.columns 
+            if (col not in exclude and not col.startswith('GT_')) 
+            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product']
+        ]
     
         results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
         
