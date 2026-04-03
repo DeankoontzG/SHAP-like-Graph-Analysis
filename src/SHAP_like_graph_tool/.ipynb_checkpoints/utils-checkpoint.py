@@ -1001,50 +1001,62 @@ def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, 
     
     return df_ranks
 
-def build_explainability_dataset(shap_explanation, xgboost_data, feature_mapping):
+def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden, feature_mapping, max_pos=2000, negative_ratio=1.0):
     """
-    Transforme l'objet SHAP en DataFrame structuré par familles de logiques.
+    Construit le dataset d'analyse en réintégrant u et v depuis dataset_hidden.
     """
-    shap_df = pd.DataFrame(shap_explanation.values, columns=X_shap.columns, index=X_shap.index)
+    y_hidden = xgboost_data['y_hidden']
+    
+    # Recréation de l'échantillon (identique à l'analyse SHAP)
+    pos_indices = y_hidden[y_hidden == 1].index
+    n_pos = min(len(pos_indices), max_pos)
+    pos_sample = pos_indices[:n_pos]
+    
+    n_neg = int(n_pos * negative_ratio)
+    neg_indices = y_hidden[y_hidden == 0].index
+    neg_sample = neg_indices[:n_neg] # On garde les premiers pour la reproductibilité
+    
+    indices = pos_sample.union(neg_sample)
+    
+    analysis_df = pd.DataFrame(index=indices)
+    analysis_df['u'] = dataset_hidden.loc[indices, 'u']
+    analysis_df['v'] = dataset_hidden.loc[indices, 'v']
+    analysis_df['target'] = dataset_hidden.loc[indices, 'target']
+    
+    X_hidden = xgboost_data['X_hidden'].loc[indices]
+    analysis_df['proba'] = xgboost_data['model'].predict_proba(X_hidden.values)[:, 1]
 
-    X_shap = xgboost_data['X_hidden']
-    y_shap = xgboost_data['y_hidden']
-    model = xgboost_data['model']
-    
-    probs = model.predict_proba(X_shap)[:, 1]
-    
-    analysis_df = pd.DataFrame(index=X_shap.index)
-    analysis_df['target'] = y_shap.loc[X_shap.index]
-    analysis_df['proba'] = probs
-    
+    feature_names = list(shap_explanation.feature_names)
     for family, features in feature_mapping.items():
-        existing_features = [f for f in features if f in shap_df.columns]
-        analysis_df[f'SHAP_{family}'] = shap_df[existing_features].abs().sum(axis=1)
-    
-    # 4. Calcul du score de dominance (SBM vs Spatial)
-    # Score > 0 => Dominance SBM | Score < 0 => Dominance Spatial
-    num = analysis_df['SHAP_SBM_Logic'] - analysis_df['SHAP_Spatial_Logic']
-    den = analysis_df['SHAP_SBM_Logic'] + analysis_df['SHAP_Spatial_Logic'] + 1e-9
+        col_indices = [feature_names.index(f) for f in features if f in feature_names]
+        if col_indices:
+            analysis_df[f'SHAP_{family}'] = np.abs(shap_explanation.values[:, col_indices]).sum(axis=1)
+        else:
+            analysis_df[f'SHAP_{family}'] = 0.0
+
+    # 5. Calcul de l'Index de Dominance
+    num = analysis_df['SHAP_Groupe_Communities'] - analysis_df['SHAP_Groupe_Embeddings']
+    den = analysis_df['SHAP_Groupe_Communities'] + analysis_df['SHAP_Groupe_Embeddings'] + 1e-10
     analysis_df['Dominance_Index'] = num / den
     
-    return 
+    return analysis_df[analysis_df['target'] == 1]
+    
 
-def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="logic_map.html"):
+def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="feature_mapping.html"):
     """
     Génère une visualisation physique interactive (HTML) dans le notebook.
     """
     net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=True, cdn_resources='remote')
     
-    for node in G_train.nodes():
+    for node in G.nodes():
         net.add_node(node, label=str(node), size=10, color="#555555")
 
     df_pos = explainability_dataset[explainability_dataset['target'] == 1].copy()
     
     cmap = plt.cm.coolwarm
-    
+
     for idx, row in df_pos.iterrows():
-        u, v = idx
-        # Normalisation du Dominance_Index (-1 à 1) vers (0 à 1) pour la colormap
+        u, v = row['u'], row['v'] 
         score_norm = (row['Dominance_Index'] + 1) / 2
         color_hex = mcolors.to_hex(cmap(score_norm))
         
@@ -1180,3 +1192,4 @@ def load_graph(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
     return nx.node_link_graph(data)
+    
