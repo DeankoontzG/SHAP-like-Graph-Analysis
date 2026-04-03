@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import igraph as ig
+from pyvis.network import Network
 import itertools
 from math import factorial
 from networkx.algorithms.community import louvain_communities
@@ -21,13 +22,13 @@ import joblib
 from joblib import Parallel, delayed
 import multiprocessing
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
 from pathlib import Path
 import json
 from xgboost import XGBClassifier
 import optuna
 import time
-
 
 
 ###############################################################
@@ -856,7 +857,6 @@ def display_shap(graphname, output_dir="outputs/plots"):
     
     # Plot 1: Summary Points (Beeswarm)
     plt.figure(figsize=(12, 8))
-    # On peut passer l'objet explanation directement, c'est plus moderne
     shap.plots.beeswarm(shap_explainer, show=False)
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, f"shap_summary_points_{graphname}.png"))
@@ -1000,6 +1000,60 @@ def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, 
         plt.tight_layout()
     
     return df_ranks
+
+def build_explainability_dataset(shap_explanation, xgboost_data, feature_mapping):
+    """
+    Transforme l'objet SHAP en DataFrame structuré par familles de logiques.
+    """
+    shap_df = pd.DataFrame(shap_explanation.values, columns=X_shap.columns, index=X_shap.index)
+
+    X_shap = xgboost_data['X_hidden']
+    y_shap = xgboost_data['y_hidden']
+    model = xgboost_data['model']
+    
+    probs = model.predict_proba(X_shap)[:, 1]
+    
+    analysis_df = pd.DataFrame(index=X_shap.index)
+    analysis_df['target'] = y_shap.loc[X_shap.index]
+    analysis_df['proba'] = probs
+    
+    for family, features in feature_mapping.items():
+        existing_features = [f for f in features if f in shap_df.columns]
+        analysis_df[f'SHAP_{family}'] = shap_df[existing_features].abs().sum(axis=1)
+    
+    # 4. Calcul du score de dominance (SBM vs Spatial)
+    # Score > 0 => Dominance SBM | Score < 0 => Dominance Spatial
+    num = analysis_df['SHAP_SBM_Logic'] - analysis_df['SHAP_Spatial_Logic']
+    den = analysis_df['SHAP_SBM_Logic'] + analysis_df['SHAP_Spatial_Logic'] + 1e-9
+    analysis_df['Dominance_Index'] = num / den
+    
+    return 
+
+def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="logic_map.html"):
+    """
+    Génère une visualisation physique interactive (HTML) dans le notebook.
+    """
+    net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=True, cdn_resources='remote')
+    
+    for node in G_train.nodes():
+        net.add_node(node, label=str(node), size=10, color="#555555")
+
+    df_pos = explainability_dataset[explainability_dataset['target'] == 1].copy()
+    
+    cmap = plt.cm.coolwarm
+    
+    for idx, row in df_pos.iterrows():
+        u, v = idx
+        # Normalisation du Dominance_Index (-1 à 1) vers (0 à 1) pour la colormap
+        score_norm = (row['Dominance_Index'] + 1) / 2
+        color_hex = mcolors.to_hex(cmap(score_norm))
+        
+        # On ajoute le lien avec un titre (tooltip au survol)
+        hover_text = f"Dominance: {row['Dominance_Index']:.2f} | Proba: {row['proba']:.2f}"
+        net.add_edge(u, v, color=color_hex, title=hover_text, width=3)
+
+    net.force_atlas_2based() # Un algorithme qui fait bien ressortir les clusters
+    return net.show(filename)
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
