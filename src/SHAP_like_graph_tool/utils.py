@@ -1067,6 +1067,27 @@ def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="feature_mappi
     net.force_atlas_2based() # Un algorithme qui fait bien ressortir les clusters
     return net.show(filename)
 
+def plot_dominance_distribution(explainability_dataset, title="Distribution de la Dominance (Spatial vs SBM)"):
+    """
+    Affiche l'histogramme et la densité du Dominance_Index. -1 = 100% Spatial | 1 = 100% SBM
+    """
+    plt.figure(figsize=(10, 6))
+    
+    sns.histplot(explainability_dataset['Dominance_Index'], kde=True, color='purple', bins=30)
+    plt.axvline(0, color='red', linestyle='--', alpha=0.6, label='Équilibre')
+    
+    plt.text(-0.9, plt.gca().get_ylim()[1]*0.9, '← Dominance SPATIAL', color='blue', fontweight='bold')
+    plt.text(0.4, plt.gca().get_ylim()[1]*0.9, 'Dominance SBM →', color='darkred', fontweight='bold')
+    
+    plt.title(title, fontsize=14)
+    plt.xlabel('Dominance Index', fontsize=12)
+    plt.ylabel('Nombre de liens (Vrais Positifs)', fontsize=12)
+    plt.xlim(-1.1, 1.1)  # On force les limites de l'index
+    plt.grid(axis='y', alpha=0.3)
+    plt.legend()
+    
+    plt.show()
+
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
 ########################################
