@@ -1001,7 +1001,7 @@ def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, 
     
     return df_ranks
 
-def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden, feature_mapping, max_pos=2000, negative_ratio=1.0):
+def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden, feature_mapping, p_matrices_origin= None, ratio_sbm = None, max_pos=2000, negative_ratio=1.0):
     """
     Construit le dataset d'analyse en réintégrant u et v depuis dataset_hidden.
     """
@@ -1038,31 +1038,42 @@ def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden,
     num = analysis_df['SHAP_Groupe_Communities'] - analysis_df['SHAP_Groupe_Embeddings']
     den = analysis_df['SHAP_Groupe_Communities'] + analysis_df['SHAP_Groupe_Embeddings'] + 1e-10
     analysis_df['Dominance_Index'] = num / den
+
+    if p_matrices_origin is not None : 
+        u_idx = analysis_df["u"].astype(int).to_numpy()
+        v_idx = analysis_df["v"].astype(int).to_numpy()
+        analysis_df["p_uv_sbm"] = p_matrices_origin[1.00][u_idx, v_idx]
+        analysis_df["p_uv_pos"] = p_matrices_origin[0.00][u_idx, v_idx] 
+
+        if ratio_sbm is not None :
+            analysis_df["p_uv_hyb"] = p_matrices_origin[ratio_sbm][u_idx, v_idx] 
     
     return analysis_df[analysis_df['target'] == 1]
     
 
-def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="feature_mapping.html"):
+def plot_pyvis_eval_graph_map(explainability_dataset, G, G_name, filename="feature_mapping.html"):
     """
     Génère une visualisation physique interactive (HTML) dans le notebook.
     """
     net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=True, cdn_resources='remote')
-    
+    net.heading = f'<h1 style="color: #ffcc00; font-family: sans-serif; margin-left: 20px;">Graphe : {G_name}</h1>'
+
     for node in G.nodes():
         net.add_node(node, label=str(node), size=10, color="#555555")
 
     df_pos = explainability_dataset[explainability_dataset['target'] == 1].copy()
-    
+
     cmap = plt.cm.coolwarm
 
     for idx, row in df_pos.iterrows():
         u, v = row['u'], row['v'] 
         score_norm = (row['Dominance_Index'] + 1) / 2
         color_hex = mcolors.to_hex(cmap(score_norm))
+        edge_width = 2 + (row['proba'] * 10) # + lien est porbable, plus c'est large
         
         # On ajoute le lien avec un titre (tooltip au survol)
         hover_text = f"Dominance: {row['Dominance_Index']:.2f} | Proba: {row['proba']:.2f}"
-        net.add_edge(u, v, color=color_hex, title=hover_text, width=3)
+        net.add_edge(u, v, color=color_hex, title=hover_text, width=edge_width)
 
     net.force_atlas_2based() # Un algorithme qui fait bien ressortir les clusters
     return net.show(filename)
