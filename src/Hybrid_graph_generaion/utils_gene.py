@@ -207,6 +207,7 @@ def generate_graph_from_probs(P, sbm_groups=None, positions=None):
 
 def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False):
     results_list = []
+    all_P_matrices = {}
 
     for alpha in Hybrid_ratios_list:
         G_name = f"{name}_{f'{alpha:.2f}'.replace('.', '_')}_pos_{f'{1-alpha:.2f}'.replace('.', '_')}.graphml"
@@ -216,6 +217,8 @@ def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k,
         print("\n" + "="*90)
         
         P_hybride = P_sbm * alpha + P_spatial * (1 - alpha)
+        alpha_key = round(alpha, 2)
+        all_P_matrices[alpha_key] = P_hybride.copy()
         g_hybride = generate_graph_from_probs(P_hybride)
 
         if save_P_matrix : 
@@ -249,6 +252,15 @@ def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k,
     print("="*90)
     print(df_results)
     print("="*90)
+
+    save_dir = "../../graph_library"
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = f"{save_dir}/{name}_P_matrices.joblib"
+    joblib.dump(all_P_matrices, save_path)
+    print(f" Dataset de matrices sauvegardé avec succès : {save_path}")
+    print(f"Taille du fichier : {os.path.getsize(save_path) / 1e6:.2f} MB")
+
+    return all_P_matrices
 
 
 #####################################
