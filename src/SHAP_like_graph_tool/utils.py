@@ -235,6 +235,15 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
                     df['GT_degrees_spatial_v'] = kv
                     df['GT_spatial_deg_product'] = ku * kv
                     #df['GT_spatial_gravity_log'] = (np.log(ku + 1e-5) + np.log(kv + 1e-5) - np.log(df['GT_pos_dist'] + 1e-6))
+
+                deg_sbm = GroundTruth.get("GT_degrees_sbm")
+                if deg_sbm is not None :
+                    ku = deg_sbm[indices_u]
+                    kv = deg_sbm[indices_v]
+                    df['GT_degrees_sbm_u'] = ku
+                    df['GT_degrees_sbm_v'] = kv
+                    df['GT_sbm_deg_product'] = ku * kv
+                    
             
             elif feat_name == 'GT_sbm_matrix':
                 ids_u = GroundTruth['GT_sbm_id'][indices_u]
@@ -720,7 +729,11 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
 
     if features_list is None or len(features_list) == 0:
         exclude = ['u', 'v', 'target', 'label']
-        features = [col for col in precalculated_folds[0][0].columns if col not in exclude]
+        features = [
+            col for col in precalculated_folds[0][0].columns
+            if (col not in exclude and not col.startswith('GT_'))
+            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+        ]
         print(f"Features détectées ({len(features)}) : {features}")
     else:
         features = features_list

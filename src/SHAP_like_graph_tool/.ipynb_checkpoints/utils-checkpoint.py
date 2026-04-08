@@ -235,6 +235,15 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
                     df['GT_degrees_spatial_v'] = kv
                     df['GT_spatial_deg_product'] = ku * kv
                     #df['GT_spatial_gravity_log'] = (np.log(ku + 1e-5) + np.log(kv + 1e-5) - np.log(df['GT_pos_dist'] + 1e-6))
+
+                deg_sbm = GroundTruth.get("GT_degrees_sbm")
+                if deg_sbm is not None :
+                    ku = deg_sbm[indices_u]
+                    kv = deg_sbm[indices_v]
+                    df['GT_degrees_sbm_u'] = ku
+                    df['GT_degrees_sbm_v'] = kv
+                    df['GT_sbm_deg_product'] = ku * kv
+                    
             
             elif feat_name == 'GT_sbm_matrix':
                 ids_u = GroundTruth['GT_sbm_id'][indices_u]
@@ -720,7 +729,11 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
 
     if features_list is None or len(features_list) == 0:
         exclude = ['u', 'v', 'target', 'label']
-        features = [col for col in precalculated_folds[0][0].columns if col not in exclude]
+        features = [
+            col for col in precalculated_folds[0][0].columns
+            if (col not in exclude and not col.startswith('GT_'))
+            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+        ]
         print(f"Features détectées ({len(features)}) : {features}")
     else:
         features = features_list
@@ -1001,7 +1014,7 @@ def calculate_feature_rankings(shap_values, feature_names, top_k, plot = False, 
     
     return df_ranks
 
-def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden, feature_mapping, max_pos=2000, negative_ratio=1.0):
+def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden, feature_mapping, p_matrices_origin= None, ratio_sbm = None, max_pos=2000, negative_ratio=1.0):
     """
     Construit le dataset d'analyse en réintégrant u et v depuis dataset_hidden.
     """
@@ -1038,34 +1051,66 @@ def build_explainability_dataset(shap_explanation, xgboost_data, dataset_hidden,
     num = analysis_df['SHAP_Groupe_Communities'] - analysis_df['SHAP_Groupe_Embeddings']
     den = analysis_df['SHAP_Groupe_Communities'] + analysis_df['SHAP_Groupe_Embeddings'] + 1e-10
     analysis_df['Dominance_Index'] = num / den
+
+    if p_matrices_origin is not None : 
+        u_idx = analysis_df["u"].astype(int).to_numpy()
+        v_idx = analysis_df["v"].astype(int).to_numpy()
+        analysis_df["p_uv_sbm"] = p_matrices_origin[1.00][u_idx, v_idx]
+        analysis_df["p_uv_pos"] = p_matrices_origin[0.00][u_idx, v_idx] 
+
+        if ratio_sbm is not None :
+            analysis_df["p_uv_hyb"] = p_matrices_origin[ratio_sbm][u_idx, v_idx] 
     
     return analysis_df[analysis_df['target'] == 1]
     
 
-def plot_pyvis_eval_graph_map(explainability_dataset, G, filename="feature_mapping.html"):
+def plot_pyvis_eval_graph_map(explainability_dataset, G, G_name, filename="feature_mapping.html"):
     """
     Génère une visualisation physique interactive (HTML) dans le notebook.
     """
     net = Network(height="750px", width="100%", bgcolor="#222222", font_color="white", notebook=True, cdn_resources='remote')
-    
+    net.heading = f'<h1 style="color: #ffcc00; font-family: sans-serif; margin-left: 20px;">Graphe : {G_name}</h1>'
+
     for node in G.nodes():
         net.add_node(node, label=str(node), size=10, color="#555555")
 
     df_pos = explainability_dataset[explainability_dataset['target'] == 1].copy()
-    
+
     cmap = plt.cm.coolwarm
 
     for idx, row in df_pos.iterrows():
         u, v = row['u'], row['v'] 
         score_norm = (row['Dominance_Index'] + 1) / 2
         color_hex = mcolors.to_hex(cmap(score_norm))
+        edge_width = 2 + (row['proba'] * 10) # + lien est porbable, plus c'est large
         
         # On ajoute le lien avec un titre (tooltip au survol)
         hover_text = f"Dominance: {row['Dominance_Index']:.2f} | Proba: {row['proba']:.2f}"
-        net.add_edge(u, v, color=color_hex, title=hover_text, width=3)
+        net.add_edge(u, v, color=color_hex, title=hover_text, width=edge_width)
 
     net.force_atlas_2based() # Un algorithme qui fait bien ressortir les clusters
     return net.show(filename)
+
+def plot_dominance_distribution(explainability_dataset, title="Distribution de la Dominance (Spatial vs SBM)"):
+    """
+    Affiche l'histogramme et la densité du Dominance_Index. -1 = 100% Spatial | 1 = 100% SBM
+    """
+    plt.figure(figsize=(10, 6))
+    
+    sns.histplot(explainability_dataset['Dominance_Index'], kde=True, color='purple', bins=30)
+    plt.axvline(0, color='red', linestyle='--', alpha=0.6, label='Équilibre')
+    
+    plt.text(-0.9, plt.gca().get_ylim()[1]*0.9, '← Dominance SPATIAL', color='blue', fontweight='bold')
+    plt.text(0.4, plt.gca().get_ylim()[1]*0.9, 'Dominance SBM →', color='darkred', fontweight='bold')
+    
+    plt.title(title, fontsize=14)
+    plt.xlabel('Dominance Index', fontsize=12)
+    plt.ylabel('Nombre de liens (Vrais Positifs)', fontsize=12)
+    plt.xlim(-1.1, 1.1)  # On force les limites de l'index
+    plt.grid(axis='y', alpha=0.3)
+    plt.legend()
+    
+    plt.show()
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
@@ -1192,4 +1237,3 @@ def load_graph(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
     return nx.node_link_graph(data)
-    

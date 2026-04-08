@@ -29,7 +29,7 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
             
         G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
         G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
-        loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_kept}", mode="save")
+        loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_name}", mode="save")
     
         best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, GroundTruth=GT, graph_name= G_name)
         print(best_params)
@@ -52,14 +52,15 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         print(dataset_train.columns)
         save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
         save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
-    
+
+        # Choix des features pour l'execution finale
         exclude = ['u', 'v', 'target', 'label'] 
         features = [
             col for col in dataset_train.columns 
-            if (col not in exclude and not col.startswith('GT_')) 
-            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product']
+            if (col not in exclude and not col.startswith('GT_'))
+            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
         ]
-    
+        
         results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
         
         X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
