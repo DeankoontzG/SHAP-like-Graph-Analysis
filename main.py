@@ -66,9 +66,9 @@ if __name__ == "__main__":
 
     for sbm_ratio in np.arange(1.00, -0.25, -0.25):
 
-        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_') 
-        G_name_ter = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_reduced_GT".replace('.', '_')  
+        G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
+        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_') 
+        G_name_ter = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_reduced_GT".replace('.', '_')  
         print("######################################")
         print(f"#### graph {G_name_ter} :  ####")
         print("######################################")
