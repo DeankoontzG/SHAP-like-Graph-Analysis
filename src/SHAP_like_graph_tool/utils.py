@@ -12,8 +12,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
+from scgravity import filter_data, create_q_bin, calculate_mass
 from node2vec import Node2Vec
 from infomap import Infomap
+from sknetwork.clustering import Louvain
 import leidenalg as la
 import graph_tool.all as gt
 import shap
@@ -29,6 +31,8 @@ import json
 from xgboost import XGBClassifier
 import optuna
 import time
+
+
 
 
 ###############################################################
@@ -360,9 +364,9 @@ def _appendInfomapCommunities(G_train):
     
     im.run()
 
-    node_to_infomap = {}
+    node_to_infomap = {node: -1 for node in nodes_list} 
     for node in im.tree:
-        if node.is_leaf:
+        if node.is_leaf and node.node_id in idx_to_node:
             original_node_name = idx_to_node[node.node_id]
             node_to_infomap[original_node_name] = node.module_id
 
@@ -1111,6 +1115,76 @@ def plot_dominance_distribution(explainability_dataset, title="Distribution de l
     plt.legend()
     
     plt.show()
+
+#######################################################
+## FONCTIONS POUR DEBIAISER INFERENCE DE COMMUNAUTES ##
+#######################################################
+
+def get_gravity_null_model(G, pos_attr, weight_attr='weight'):
+    """
+    Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
+    Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
+    """
+    # Extraction des poids des arrêtes si il y en a, 1 sinon
+    od_data = {}
+    for u, v, d in G.edges(data=True):
+        weight = d.get(weight_attr, 1.0)
+        if u not in od_data: od_data[u] = {}
+        od_data[u][v] = weight
+
+    # Calcul des distances
+    nodes = list(G.nodes())
+    pos = nx.get_node_attributes(G, pos_attr)
+    
+    dist_data = {}
+    for u in nodes:
+        dist_data[u] = {}
+        for v in nodes:
+            if u == v: continue
+            d_uv = np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
+            dist_data[u][v] = d_uv
+
+    # Pipeline scgravity : https://pypi.org/project/scgravity/
+    od_data_clean = filter_data(od_data, dist_data)
+    q_bin = create_q_bin(od_data_clean, dist_data, each_num=min(500, len(G.edges())))
+    m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
+
+    # Reconstruction de la matrice Pij du Null Model inféré
+    # Pij = m_out_i * m_in_j * Q(dist_ij)
+    n = len(nodes)
+    node_to_idx = {node: i for i, node in enumerate(nodes)}
+    P = np.zeros((n, n))
+
+    for i, u in enumerate(nodes):
+        for j, v in enumerate(nodes):
+            if u == v: continue
+            
+            bin_idx = q_bin["call_dic"][u][v]
+            q_val = Q_hist[bin_idx]
+            P[i, j] = m_out.get(u, 0) * m_in.get(v, 0) * q_val
+    
+    return P
+
+def _appendSpatialDeceasedCommunities(G, pos_attr):
+    P, nodes = get_gravity_null_model(G, pos_attr)
+    
+    # 2. Obtenir la matrice d'adjacence réelle A
+    A = nx.to_numpy_array(G, nodelist=nodes)
+    
+    # 3. Calculer la matrice de modularité débiaisée
+    # B = A - P
+    B = A - P
+    
+    # 4. Utiliser Louvain de scikit-network sur la matrice B
+    # On passe directement la matrice de modularité
+    louvain = Louvain()
+    labels = louvain.fit_predict(B) 
+    
+    # 5. Stockage dans le graphe
+    spatial_id = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
+    nx.set_node_attributes(G, spatial_id, "spatial_louvain_id")
+    
+    return G
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
