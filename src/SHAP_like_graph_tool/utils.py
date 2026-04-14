@@ -736,7 +736,7 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
         features = [
             col for col in precalculated_folds[0][0].columns
             if (col not in exclude and not col.startswith('GT_'))
-            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
         ]
         print(f"Features détectées ({len(features)}) : {features}")
     else:
