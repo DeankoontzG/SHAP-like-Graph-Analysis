@@ -62,13 +62,12 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-    features = ['ra', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'katz_u', 'katz_v', 'sbm_density', 'same_sbm', 'deepwalk_cos', 'deepwalk_dist', 'deepwalk_rank', 'GT_sbm_density', 'GT_pos_dist', 'GT_spatial_deg_product', 'GT_sbm_deg_product']
+    features = ['ra', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'katz_u', 'katz_v', 'surprise_density', 'same_surprise', 'deepwalk_cos', 'deepwalk_dist', 'deepwalk_rank']
 
     for sbm_ratio in np.arange(1.00, -0.25, -0.25):
 
         G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_') 
-        G_name_ter = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_reduced_GT".replace('.', '_')  
+        G_name_ter = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_reduced".replace('.', '_')  
         print("######################################")
         print(f"#### graph {G_name_ter} :  ####")
         print("######################################")
@@ -81,32 +80,14 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Erreur lors du chargement de {path} : {e}")
 
-        if 'GroundTruth_JSON' in G.graph:
-            print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
-            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-            
-            GT = {'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
-                'GT_pos': np.array(gt_raw['GT_pos']),
-                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
-                'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']),
-                'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial'])
-                 }
-            
-            if 'P_matrix_JSON' in G.graph:
-                print("P_matrix trouvée.")
-                GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
-        else:
-            print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
-            GT = None
-
-        G_kept, G_hidden = gp.hide_graph_links(G, test_size=0.10)
-        G_train, G_test = gp.hide_graph_links(G_kept, test_size=0.15)
+        G_kept, G_hidden = gput.hide_graph_links(G, test_size=0.10)
+        G_train, G_test = gput.hide_graph_links(G_kept, test_size=0.15)
     
-        best_params, results_summary = gp.k_fold_cross_validation(G_kept, k=1, features_list=features, n_trials=50, GroundTruth=GT, graph_name= G_name_ter)
+        best_params, results_summary = gput.k_fold_cross_validation(G_kept, k=1, features_list=features, n_trials=50, GroundTruth=None, graph_name= G_name_ter)
         print(best_params)
 
-        dataset_train = gput.load_dataset(f"dataset_train_{G_name_bis}")
-        dataset_hidden = gput.load_dataset(f"dataset_hidden_{G_name_bis}")
+        dataset_train = gput.load_dataset(f"dataset_train_{G_name}")
+        dataset_hidden = gput.load_dataset(f"dataset_hidden_{G_name}")
 
         results_test, model, X_train, y_train, X_test, y_test = gp.train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
         
@@ -129,14 +110,14 @@ if __name__ == "__main__":
         }
 
         print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
-        gp.loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name_ter}.joblib", mode="save")
+        gput.loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name_ter}.joblib", mode="save")
     
         print("\n RÉSULTATS")
         print(results_test_hidden.to_string(index=False))
 
         shap_explanation = gput.analyze_with_shap_tree(model, X_hidden, y_hidden)
         print("Sauvegarde de l'analyse SHAP")
-        gp.loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name_ter}.joblib", mode="save")
+        gput.loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name_ter}.joblib", mode="save")
 
 
 """

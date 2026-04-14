@@ -58,7 +58,7 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         features = [
             col for col in dataset_train.columns 
             if (col not in exclude and not col.startswith('GT_'))
-            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
         ]
         
         results_test, model, X_train, y_train, X_test, y_test = train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
