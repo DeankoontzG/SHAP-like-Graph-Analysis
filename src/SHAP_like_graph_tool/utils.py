@@ -42,7 +42,7 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', "spatial_leiden"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -299,7 +299,9 @@ def computeStructureFeatures(G_train):
     
     return G_train
 
-### Fonction parente qui appelle les différentes fonctions de calcul de features de communauté
+#############################################
+## FONCTIONS POUR INFERENCE DE COMMUNAUTES ##
+#############################################
 
 def _appendLouvainCommunities(G_train):
     communities = nx.community.louvain_communities(G_train, seed=42)
@@ -396,6 +398,33 @@ def _appendGraphToolSBM(G_train):
     nx.set_node_attributes(G_train, node_to_community, "sbm_id")
     _normalize_community_assignment(G_train, "sbm_id")
 
+
+def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
+    P, nodes = get_gravity_null_model(G_train, pos_attr)
+    A = nx.to_numpy_array(G_train)
+    # B = matrice de modularité débiaisée
+    B = A - P
+    B_symetric = (B + B.T) / 2
+
+    asymmetry_sum = np.sum(np.abs(B - B_symetric))
+    max_diff = np.max(np.abs(B - B_symetric))
+
+    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
+    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+    print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    g_leiden = ig.Graph.Weighted_Adjacency(B_symetric.tolist(), mode="undirected")
+    
+    # On passe directement la matrice de modularité à Leiden. Equivalent sur 1ère iter, 
+    # discutable sur les suivantes mais approximation à priori OK
+    partition = la.find_partition(g_leiden, la.CPMVertexPartition, weights='weight', resolution_parameter=0)
+    
+    labels = partition.membership
+    node_to_community = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
+    nx.set_node_attributes(G_train, node_to_community, "spatial_leiden_id")
+    
+    return G_train
+
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
     nodes_data = nx.get_node_attributes(G, attr_name)
@@ -414,13 +443,81 @@ def _normalize_community_assignment(G, attr_name):
             
     nx.set_node_attributes(G, mapping, attr_name)
 
+def get_gravity_null_model(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
+    """
+    Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
+    Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
+    """
+    # Extraction des poids des arrêtes si il y en a, 1 sinon
+    od_data = {}
+    for u, v, d in G.edges(data=True):
+        weight = d.get(weight_attr, 1.0)
+        if u not in od_data: od_data[u] = {}
+        od_data[u][v] = weight
+
+    # Calcul des distances
+    nodes = list(G.nodes())
+    pos = nx.get_node_attributes(G, pos_attr)
+    
+    dist_data = {}
+    for u in nodes:
+        dist_data[u] = {}
+        for v in nodes:
+            if u == v: continue
+            d_uv = np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
+            dist_data[u][v] = d_uv
+
+    # Pipeline scgravity : https://pypi.org/project/scgravity/
+    od_data_clean = filter_data(od_data, dist_data)
+    custom_each_num = max(10, len(G.edges()) // nb_bins_target)
+    q_bin = create_q_bin(od_data_clean, dist_data, each_num=custom_each_num)
+    m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
+
+    thresholds = list(q_bin['bin_left']) + [q_bin['bin_right'][-1]]
+    n = len(nodes)
+    m_out_vec = np.array([m_out.get(u, 0) for u in nodes])
+    m_in_vec = np.array([m_in.get(u, 0) for u in nodes])
+    P = np.zeros((n, n))
+    
+    call_dic = q_bin.get("call_dic", {})
+
+    for i, u in enumerate(nodes):
+        u_str = str(u) 
+        u_bins = call_dic.get(u_str, {})
+        
+        for j, v in enumerate(nodes):
+            if i == j: continue
+            v_str = str(v)
+            
+            bin_idx = u_bins.get(v_str)
+            
+            if bin_idx is None:
+                # IMPUTATION : La paire n'avait pas de lien, on cherche son bin théorique
+                d_uv = dist_data[u][v]
+                # np.searchsorted trouve où d_uv s'insère dans les thresholds
+                idx = np.searchsorted(thresholds, d_uv) - 1
+                bin_idx = max(0, min(idx, len(Q_hist) - 1))
+            
+            q_val = Q_hist[bin_idx]
+            P[i, j] = m_out_vec[i] * m_in_vec[j] * q_val
+
+    # Normalisation pour que la somme de P soit égale à la somme de A
+    A_sum = len(G.edges())
+    normalization_factor = A_sum / P.sum()
+    P = P * (A_sum / P.sum())
+    print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
+
+    return P, nodes
+
+
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
     'infomap': _appendInfomapCommunities,
     'sbm': _appendGraphToolSBM,
     'leiden': _appendLeidenCommunities,
     'surprise': _appendSurpriseCommunities,
-    'significance': _appendSignificanceCommunities
+    'significance': _appendSignificanceCommunities,
+    "spatial_leiden" : _appendSpatialLeidenCommunities
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
@@ -736,7 +833,7 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
         features = [
             col for col in precalculated_folds[0][0].columns
             if (col not in exclude and not col.startswith('GT_'))
-            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
         ]
         print(f"Features détectées ({len(features)}) : {features}")
     else:
@@ -1116,75 +1213,6 @@ def plot_dominance_distribution(explainability_dataset, title="Distribution de l
     
     plt.show()
 
-#######################################################
-## FONCTIONS POUR DEBIAISER INFERENCE DE COMMUNAUTES ##
-#######################################################
-
-def get_gravity_null_model(G, pos_attr, weight_attr='weight'):
-    """
-    Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
-    Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
-    """
-    # Extraction des poids des arrêtes si il y en a, 1 sinon
-    od_data = {}
-    for u, v, d in G.edges(data=True):
-        weight = d.get(weight_attr, 1.0)
-        if u not in od_data: od_data[u] = {}
-        od_data[u][v] = weight
-
-    # Calcul des distances
-    nodes = list(G.nodes())
-    pos = nx.get_node_attributes(G, pos_attr)
-    
-    dist_data = {}
-    for u in nodes:
-        dist_data[u] = {}
-        for v in nodes:
-            if u == v: continue
-            d_uv = np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
-            dist_data[u][v] = d_uv
-
-    # Pipeline scgravity : https://pypi.org/project/scgravity/
-    od_data_clean = filter_data(od_data, dist_data)
-    q_bin = create_q_bin(od_data_clean, dist_data, each_num=min(500, len(G.edges())))
-    m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
-
-    # Reconstruction de la matrice Pij du Null Model inféré
-    # Pij = m_out_i * m_in_j * Q(dist_ij)
-    n = len(nodes)
-    node_to_idx = {node: i for i, node in enumerate(nodes)}
-    P = np.zeros((n, n))
-
-    for i, u in enumerate(nodes):
-        for j, v in enumerate(nodes):
-            if u == v: continue
-            
-            bin_idx = q_bin["call_dic"][u][v]
-            q_val = Q_hist[bin_idx]
-            P[i, j] = m_out.get(u, 0) * m_in.get(v, 0) * q_val
-    
-    return P
-
-def _appendSpatialDeceasedCommunities(G, pos_attr):
-    P, nodes = get_gravity_null_model(G, pos_attr)
-    
-    # 2. Obtenir la matrice d'adjacence réelle A
-    A = nx.to_numpy_array(G, nodelist=nodes)
-    
-    # 3. Calculer la matrice de modularité débiaisée
-    # B = A - P
-    B = A - P
-    
-    # 4. Utiliser Louvain de scikit-network sur la matrice B
-    # On passe directement la matrice de modularité
-    louvain = Louvain()
-    labels = louvain.fit_predict(B) 
-    
-    # 5. Stockage dans le graphe
-    spatial_id = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
-    nx.set_node_attributes(G, spatial_id, "spatial_louvain_id")
-    
-    return G
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
