@@ -449,7 +449,7 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
         return P_symetric[idx_u, idx_v]
 
     # Appel de l'algorithme développé dans MetaLouvain.py
-    partition = best_partition(G_train, resolution=0.3, null_model=my_matrix_null_model)
+    partition = best_partition(G_train, resolution=1, null_model=my_matrix_null_model)
     
     print("--- Diagnostic de l'objet partition ---")
     print(f"Nombre de nœuds assignés : {len(partition)}")
