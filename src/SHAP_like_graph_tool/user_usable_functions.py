@@ -31,16 +31,17 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
         loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_name}", mode="save")
     
-        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=50, GroundTruth=GT, graph_name= G_name)
+        best_params, results_summary = k_fold_cross_validation(G_kept, k=1, features_list=None, n_trials=30, GroundTruth=GT, graph_name= G_name)
         print(best_params)
 
         G_train_with_structure = computeStructureFeatures(G_train)
-        G_train_with_communities = computeCommunityFeatures(G_train_with_structure)
-        G_train_with_distances = computeDistanceFeatures(G_train_with_communities)
+        G_train_with_distances = computeDistanceFeatures(G_train_with_structure)
+        G_train_with_communities = computeCommunityFeatures(G_train_with_distances)
 
         G_kept_with_structure = computeStructureFeatures(G_kept)
-        G_kept_with_communities = computeCommunityFeatures(G_kept_with_structure)
-        G_kept_with_distances = computeDistanceFeatures(G_kept_with_communities)
+        G_kept_with_distances = computeDistanceFeatures(G_kept_with_structure)
+        G_kept_with_communities = computeCommunityFeatures(G_kept_with_distances)
+        
         print("Sauvegarde des datasets")
         loadsave_data_joblib(data=G_train_with_distances, filename=f"G_train_w_struct_com_dist_{G_name}", mode="save")
         loadsave_data_joblib(data=G_kept_with_distances, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")

@@ -285,7 +285,7 @@ def induced_null_model(new_node2com, null_model):
     new_com2nodes={}
     for node, com in new_node2com.items():
         new_com2nodes.setdefault(com, set()).add(node)
-    print("new level coms: "+str(len(new_com2nodes)))
+    #print("new level coms: "+str(len(new_com2nodes)))
 
     for com1,com2 in itertools.combinations_with_replacement(new_com2nodes.keys(),2):
         len_com1=len(new_com2nodes[com1])
@@ -303,7 +303,7 @@ def induced_null_model(new_node2com, null_model):
         new_null_model[frozenset([com1,com2])]=sum([null_model(u,v) for u,v in sample])
 
     update_null_model= lambda u,v: new_null_model[frozenset([u,v])]
-    print(new_null_model)
+    #print(new_null_model)
     return update_null_model
 
 

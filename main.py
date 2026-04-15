@@ -60,67 +60,7 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
     nx.write_graphml(G_nx, path)
     print(f"Graphe exporté avec succès dans : {path}")
 
-if __name__ == "__main__":
 
-    features = ['ra', 'pr_u', 'pr_v', 'lcc_u', 'lcc_v', 'katz_u', 'katz_v', 'surprise_density', 'same_surprise', 'deepwalk_cos', 'deepwalk_dist', 'deepwalk_rank']
-
-    for sbm_ratio in np.arange(1.00, -0.25, -0.25):
-
-        G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_ter = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_reduced".replace('.', '_')  
-        print("######################################")
-        print(f"#### graph {G_name_ter} :  ####")
-        print("######################################")
-
-        path = f"graph_library/{G_name}.graphml"
-        
-        try:
-            G = load_graphml_safe(path)
-            print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-        except Exception as e:
-            print(f"Erreur lors du chargement de {path} : {e}")
-
-        G_kept, G_hidden = gput.hide_graph_links(G, test_size=0.10)
-        G_train, G_test = gput.hide_graph_links(G_kept, test_size=0.15)
-    
-        best_params, results_summary = gput.k_fold_cross_validation(G_kept, k=1, features_list=features, n_trials=50, GroundTruth=None, graph_name= G_name_ter)
-        print(best_params)
-
-        dataset_train = gput.load_dataset(f"dataset_train_{G_name}")
-        dataset_hidden = gput.load_dataset(f"dataset_hidden_{G_name}")
-
-        results_test, model, X_train, y_train, X_test, y_test = gp.train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
-        
-        X_hidden = dataset_hidden[features]
-        y_hidden = dataset_hidden['target']
-        
-        results_hidden = gp.get_performance_metrics(model, X_hidden, y_hidden, "Hidden_")
-        results_test_hidden = pd.concat([results_test, results_hidden], axis=1)
-    
-        data_to_save = {
-            "results": results_test_hidden,
-            "model": model,
-            "X_test": X_test,
-            "X_train": X_train,
-            "y_test": y_test,
-            "y_train": y_train,
-            "X_hidden": X_hidden,
-            "y_hidden": y_hidden,
-            "best_params": best_params
-        }
-
-        print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
-        gput.loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name_ter}.joblib", mode="save")
-    
-        print("\n RÉSULTATS")
-        print(results_test_hidden.to_string(index=False))
-
-        shap_explanation = gput.analyze_with_shap_tree(model, X_hidden, y_hidden)
-        print("Sauvegarde de l'analyse SHAP")
-        gput.loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name_ter}.joblib", mode="save")
-
-
-"""
 if __name__ == "__main__":
 
     execution_stats = []
@@ -128,7 +68,7 @@ if __name__ == "__main__":
     for sbm_ratio in np.arange(1.00, -0.25, -0.25):
         
         G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_')  
+        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
         print("######################################")
         print(f"#### graph {G_name_bis} :  ####")
         print("######################################")
@@ -169,7 +109,7 @@ if __name__ == "__main__":
     for sbm_ratio in np.arange(1.00, -0.25, -0.25):
         
         G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_GT".replace('.', '_')  
+        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
         print("######################################")
         print(f"#### graph {G_name_bis} :  ####")
         print("######################################")
@@ -204,4 +144,4 @@ if __name__ == "__main__":
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
-"""
+    

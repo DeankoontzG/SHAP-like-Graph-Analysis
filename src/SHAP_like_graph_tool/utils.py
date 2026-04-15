@@ -22,6 +22,8 @@ import leidenalg as la
 import graph_tool.all as gt
 import shap
 import os
+import gc
+import psutil 
 import joblib
 from joblib import Parallel, delayed
 import multiprocessing
@@ -447,7 +449,7 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
         return P_symetric[idx_u, idx_v]
 
     # Appel de l'algorithme développé dans MetaLouvain.py
-    partition = best_partition(G_train, null_model=my_matrix_null_model)
+    partition = best_partition(G_train, resolution=0.3, null_model=my_matrix_null_model)
     
     print("--- Diagnostic de l'objet partition ---")
     print(f"Nombre de nœuds assignés : {len(partition)}")
@@ -828,14 +830,15 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, GroundTruth=Non
 
     # Enrichissement du graphe de train
     G_train = computeStructureFeatures(G_train)
-    G_train = computeCommunityFeatures(G_train)
     G_train = computeDistanceFeatures(G_train)
+    G_train = computeCommunityFeatures(G_train)
 
     # Enrichissement du graphe de validation finale
     G_kept = computeStructureFeatures(G_kept)
-    G_kept = computeCommunityFeatures(G_kept)
     G_kept = computeDistanceFeatures(G_kept)
+    G_kept = computeCommunityFeatures(G_kept)
 
+    
     # Création des datasets
     ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0, GroundTruth=GroundTruth) 
     ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0, GroundTruth=GroundTruth)
@@ -862,18 +865,33 @@ def _prepare_precalculated_folds(G, k=1, GroundTruth = None):
     
     return precalculated_folds
 
-def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
+def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50, n_jobs = -2):
 
     if features_list is None or len(features_list) == 0:
         exclude = ['u', 'v', 'target', 'label']
         features = [
             col for col in precalculated_folds[0][0].columns
             if (col not in exclude and not col.startswith('GT_'))
-            or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
+            #or col in ['GT_sbm_density', 'GT_pos_dist','GT_spatial_deg_product', 'GT_sbm_deg_product']
         ]
         print(f"Features détectées ({len(features)}) : {features}")
     else:
         features = features_list
+
+    optimized_folds = []
+    for ds_train, ds_val in precalculated_folds:
+        optimized_folds.append({
+            'X_train': ds_train[features].values.astype('float32'),
+            'y_train': ds_train['target'].values,
+            'X_val': ds_val[features].values.astype('float32'),
+            'y_val': ds_val['target'].values
+        })
+
+    total_cores = os.cpu_count() or 1
+    if n_jobs < 0:
+        n_jobs = max(1, total_cores + n_jobs)
+    else:
+        n_jobs = min(n_jobs, total_cores) if n_jobs > 0 else total_cores
 
     def objective(trial):
         params = {
@@ -886,11 +904,13 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
             'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True),
             'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True),
             'tree_method': 'hist',
+            "n_jobs" : n_jobs,
             'random_state': 42
         }
 
         f_auc_v, f_auc_t, f_ap_v = [], [], []
 
+        """
         for ds_train, ds_val in precalculated_folds:
             model = XGBClassifier(**params)
             model.fit(ds_train[features], ds_train['target'])
@@ -901,11 +921,26 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
             f_auc_v.append(roc_auc_score(ds_val['target'], p_val))
             f_auc_t.append(roc_auc_score(ds_train['target'], p_train))
             f_ap_v.append(average_precision_score(ds_val['target'], p_val))
+        """
+
+        for fold in optimized_folds:
+            model = XGBClassifier(**params)
+            model.fit(fold['X_train'], fold['y_train'])
+
+            p_val = model.predict_proba(fold['X_val'])[:, 1]
+            p_train = model.predict_proba(fold['X_train'])[:, 1]
+            
+            f_auc_v.append(roc_auc_score(fold['y_val'], p_val))
+            f_auc_t.append(roc_auc_score(fold['y_train'], p_train))
+            f_ap_v.append(average_precision_score(fold['y_val'], p_val))
         
         avg_auc_v = np.mean(f_auc_v)
         trial.set_user_attr("std_auc", np.std(f_auc_v))
         trial.set_user_attr("avg_ap", np.mean(f_ap_v))
         trial.set_user_attr("delta_auc", np.mean(f_auc_t) - avg_auc_v)
+
+        del model 
+        gc.collect()
 
         return avg_auc_v
 

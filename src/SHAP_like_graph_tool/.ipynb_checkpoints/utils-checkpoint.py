@@ -1,3 +1,5 @@
+from .MetaLouvain import *
+
 import random
 from re import X
 import numpy as np
@@ -12,12 +14,16 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
+from scgravity import filter_data, create_q_bin, calculate_mass
 from node2vec import Node2Vec
 from infomap import Infomap
+from sknetwork.clustering import Louvain
 import leidenalg as la
 import graph_tool.all as gt
 import shap
 import os
+import gc
+import psutil 
 import joblib
 from joblib import Parallel, delayed
 import multiprocessing
@@ -31,6 +37,8 @@ import optuna
 import time
 
 
+
+
 ###############################################################
 ## CONTANTES, DONT MAPPING VERS ALGOS DE CALCUL DE MÉTRIQUES ##
 ###############################################################
@@ -38,7 +46,7 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', "spatial_leiden", "spatial_louvain"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -295,7 +303,9 @@ def computeStructureFeatures(G_train):
     
     return G_train
 
-### Fonction parente qui appelle les différentes fonctions de calcul de features de communauté
+#############################################
+## FONCTIONS POUR INFERENCE DE COMMUNAUTES ##
+#############################################
 
 def _appendLouvainCommunities(G_train):
     communities = nx.community.louvain_communities(G_train, seed=42)
@@ -360,9 +370,9 @@ def _appendInfomapCommunities(G_train):
     
     im.run()
 
-    node_to_infomap = {}
+    node_to_infomap = {node: -1 for node in nodes_list} 
     for node in im.tree:
-        if node.is_leaf:
+        if node.is_leaf and node.node_id in idx_to_node:
             original_node_name = idx_to_node[node.node_id]
             node_to_infomap[original_node_name] = node.module_id
 
@@ -392,6 +402,64 @@ def _appendGraphToolSBM(G_train):
     nx.set_node_attributes(G_train, node_to_community, "sbm_id")
     _normalize_community_assignment(G_train, "sbm_id")
 
+
+def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
+    P, nodes = get_gravity_null_model(G_train, pos_attr)
+    A = nx.to_numpy_array(G_train)
+    # B = matrice de modularité débiaisée
+    B = A - P
+    B_symetric = (B + B.T) / 2
+
+    asymmetry_sum = np.sum(np.abs(B - B_symetric))
+    max_diff = np.max(np.abs(B - B_symetric))
+
+    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
+    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+    print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    g_leiden = ig.Graph.Weighted_Adjacency(B_symetric.tolist(), mode="undirected")
+    
+    # On passe directement la matrice de modularité à Leiden. Equivalent sur 1ère iter, 
+    # discutable sur les suivantes mais approximation à priori OK
+    partition = la.find_partition(g_leiden, la.CPMVertexPartition, weights='weight', resolution_parameter=0)
+    
+    labels = partition.membership
+    node_to_community = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
+    nx.set_node_attributes(G_train, node_to_community, "spatial_leiden_id")
+    
+    return G_train
+
+def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
+    P, nodes = get_gravity_null_model(G_train, pos_attr)
+    A = nx.to_numpy_array(G_train)
+    P_symetric = (P + P.T) / 2
+
+    asymmetry_sum = np.sum(np.abs(P - P_symetric))
+    max_diff = np.max(np.abs(P - P_symetric))
+
+    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
+    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+    print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    mapping = {node: i for i, node in enumerate(nodes)}
+
+    def my_matrix_null_model(u, v):
+        idx_u = mapping[u]
+        idx_v = mapping[v]
+        return P_symetric[idx_u, idx_v]
+
+    # Appel de l'algorithme développé dans MetaLouvain.py
+    partition = best_partition(G_train, resolution=0.3, null_model=my_matrix_null_model)
+    
+    print("--- Diagnostic de l'objet partition ---")
+    print(f"Nombre de nœuds assignés : {len(partition)}")
+    print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
+    print("---------------------------------------")
+
+    nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
+    
+    return G_train
+
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
     nodes_data = nx.get_node_attributes(G, attr_name)
@@ -410,13 +478,82 @@ def _normalize_community_assignment(G, attr_name):
             
     nx.set_node_attributes(G, mapping, attr_name)
 
+def get_gravity_null_model(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
+    """
+    Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
+    Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
+    """
+    # Extraction des poids des arrêtes si il y en a, 1 sinon
+    od_data = {}
+    for u, v, d in G.edges(data=True):
+        weight = d.get(weight_attr, 1.0)
+        if u not in od_data: od_data[u] = {}
+        od_data[u][v] = weight
+
+    # Calcul des distances
+    nodes = list(G.nodes())
+    pos = nx.get_node_attributes(G, pos_attr)
+    
+    dist_data = {}
+    for u in nodes:
+        dist_data[u] = {}
+        for v in nodes:
+            if u == v: continue
+            d_uv = np.linalg.norm(np.array(pos[u]) - np.array(pos[v]))
+            dist_data[u][v] = d_uv
+
+    # Pipeline scgravity : https://pypi.org/project/scgravity/
+    od_data_clean = filter_data(od_data, dist_data)
+    custom_each_num = max(10, len(G.edges()) // nb_bins_target)
+    q_bin = create_q_bin(od_data_clean, dist_data, each_num=custom_each_num)
+    m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
+
+    thresholds = list(q_bin['bin_left']) + [q_bin['bin_right'][-1]]
+    n = len(nodes)
+    m_out_vec = np.array([m_out.get(u, 0) for u in nodes])
+    m_in_vec = np.array([m_in.get(u, 0) for u in nodes])
+    P = np.zeros((n, n))
+    
+    call_dic = q_bin.get("call_dic", {})
+
+    for i, u in enumerate(nodes):
+        u_str = str(u) 
+        u_bins = call_dic.get(u_str, {})
+        
+        for j, v in enumerate(nodes):
+            if i == j: continue
+            v_str = str(v)
+            
+            bin_idx = u_bins.get(v_str)
+            
+            if bin_idx is None:
+                # IMPUTATION : La paire n'avait pas de lien, on cherche son bin théorique
+                d_uv = dist_data[u][v]
+                # np.searchsorted trouve où d_uv s'insère dans les thresholds
+                idx = np.searchsorted(thresholds, d_uv) - 1
+                bin_idx = max(0, min(idx, len(Q_hist) - 1))
+            
+            q_val = Q_hist[bin_idx]
+            P[i, j] = m_out_vec[i] * m_in_vec[j] * q_val
+
+    # Normalisation pour que la somme de P soit égale à la somme de A
+    A_sum = len(G.edges())
+    normalization_factor = A_sum / P.sum()
+    P = P * (A_sum / P.sum())
+    print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
+
+    return P, nodes
+
+
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
     'infomap': _appendInfomapCommunities,
     'sbm': _appendGraphToolSBM,
     'leiden': _appendLeidenCommunities,
     'surprise': _appendSurpriseCommunities,
-    'significance': _appendSignificanceCommunities
+    'significance': _appendSignificanceCommunities,
+    "spatial_leiden" : _appendSpatialLeidenCommunities,
+    "spatial_louvain" : _appendSpatialLouvainCommunities
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
@@ -471,7 +608,9 @@ def prepare_all_densities(G_train):
         
     return all_densities
 
-### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
+###########################################
+## FONCTIONS POUR INFERENCE D'EMBEDDINGS ##
+###########################################
 
 def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
@@ -691,14 +830,15 @@ def _process_single_fold(f_idx, t_idx, v_idx, edges, nodes_data, GroundTruth=Non
 
     # Enrichissement du graphe de train
     G_train = computeStructureFeatures(G_train)
-    G_train = computeCommunityFeatures(G_train)
     G_train = computeDistanceFeatures(G_train)
+    G_train = computeCommunityFeatures(G_train)
 
     # Enrichissement du graphe de validation finale
     G_kept = computeStructureFeatures(G_kept)
-    G_kept = computeCommunityFeatures(G_kept)
     G_kept = computeDistanceFeatures(G_kept)
+    G_kept = computeCommunityFeatures(G_kept)
 
+    
     # Création des datasets
     ds_train = prepare_balanced_data(G_test, G_train, negative_ratio=10.0, GroundTruth=GroundTruth) 
     ds_val = prepare_balanced_data(G_hidden, G_kept, negative_ratio=25.0, GroundTruth=GroundTruth)
@@ -725,7 +865,7 @@ def _prepare_precalculated_folds(G, k=1, GroundTruth = None):
     
     return precalculated_folds
 
-def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
+def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50, n_jobs = -2):
 
     if features_list is None or len(features_list) == 0:
         exclude = ['u', 'v', 'target', 'label']
@@ -738,6 +878,21 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
     else:
         features = features_list
 
+    optimized_folds = []
+    for ds_train, ds_val in precalculated_folds:
+        optimized_folds.append({
+            'X_train': ds_train[features].values.astype('float32'),
+            'y_train': ds_train['target'].values,
+            'X_val': ds_val[features].values.astype('float32'),
+            'y_val': ds_val['target'].values
+        })
+
+    total_cores = os.cpu_count() or 1
+    if n_jobs < 0:
+        n_jobs = max(1, total_cores + n_jobs)
+    else:
+        n_jobs = min(n_jobs, total_cores) if n_jobs > 0 else total_cores
+
     def objective(trial):
         params = {
             'n_estimators': 150,
@@ -749,11 +904,13 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
             'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True),
             'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True),
             'tree_method': 'hist',
+            "n_jobs" : n_jobs,
             'random_state': 42
         }
 
         f_auc_v, f_auc_t, f_ap_v = [], [], []
 
+        """
         for ds_train, ds_val in precalculated_folds:
             model = XGBClassifier(**params)
             model.fit(ds_train[features], ds_train['target'])
@@ -764,11 +921,26 @@ def _run_optuna_tuning(precalculated_folds, features_list=None, n_trials=50):
             f_auc_v.append(roc_auc_score(ds_val['target'], p_val))
             f_auc_t.append(roc_auc_score(ds_train['target'], p_train))
             f_ap_v.append(average_precision_score(ds_val['target'], p_val))
+        """
+
+        for fold in optimized_folds:
+            model = XGBClassifier(**params)
+            model.fit(fold['X_train'], fold['y_train'])
+
+            p_val = model.predict_proba(fold['X_val'])[:, 1]
+            p_train = model.predict_proba(fold['X_train'])[:, 1]
+            
+            f_auc_v.append(roc_auc_score(fold['y_val'], p_val))
+            f_auc_t.append(roc_auc_score(fold['y_train'], p_train))
+            f_ap_v.append(average_precision_score(fold['y_val'], p_val))
         
         avg_auc_v = np.mean(f_auc_v)
         trial.set_user_attr("std_auc", np.std(f_auc_v))
         trial.set_user_attr("avg_ap", np.mean(f_ap_v))
         trial.set_user_attr("delta_auc", np.mean(f_auc_t) - avg_auc_v)
+
+        del model 
+        gc.collect()
 
         return avg_auc_v
 
@@ -1111,6 +1283,7 @@ def plot_dominance_distribution(explainability_dataset, title="Distribution de l
     plt.legend()
     
     plt.show()
+
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
