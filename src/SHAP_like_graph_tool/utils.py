@@ -1,3 +1,5 @@
+from .MetaLouvain import *
+
 import random
 from re import X
 import numpy as np
@@ -42,7 +44,7 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', "spatial_leiden"]
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', "spatial_leiden", "spatial_louvain"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -425,6 +427,37 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
     
     return G_train
 
+def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
+    P, nodes = get_gravity_null_model(G_train, pos_attr)
+    A = nx.to_numpy_array(G_train)
+    P_symetric = (P + P.T) / 2
+
+    asymmetry_sum = np.sum(np.abs(P - P_symetric))
+    max_diff = np.max(np.abs(P - P_symetric))
+
+    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
+    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+    print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    mapping = {node: i for i, node in enumerate(nodes)}
+
+    def my_matrix_null_model(u, v):
+        idx_u = mapping[u]
+        idx_v = mapping[v]
+        return P_symetric[idx_u, idx_v]
+
+    # Appel de l'algorithme développé dans MetaLouvain.py
+    partition = best_partition(G_train, null_model=my_matrix_null_model)
+    
+    print("--- Diagnostic de l'objet partition ---")
+    print(f"Nombre de nœuds assignés : {len(partition)}")
+    print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
+    print("---------------------------------------")
+
+    nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
+    
+    return G_train
+
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
     nodes_data = nx.get_node_attributes(G, attr_name)
@@ -517,7 +550,8 @@ COMMUNITY_MAPPING = {
     'leiden': _appendLeidenCommunities,
     'surprise': _appendSurpriseCommunities,
     'significance': _appendSignificanceCommunities,
-    "spatial_leiden" : _appendSpatialLeidenCommunities
+    "spatial_leiden" : _appendSpatialLeidenCommunities,
+    "spatial_louvain" : _appendSpatialLouvainCommunities
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
@@ -572,7 +606,9 @@ def prepare_all_densities(G_train):
         
     return all_densities
 
-### Fonction parente qui appelle les différentes fonctions de calcul de features de distance
+###########################################
+## FONCTIONS POUR INFERENCE D'EMBEDDINGS ##
+###########################################
 
 def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
     """
