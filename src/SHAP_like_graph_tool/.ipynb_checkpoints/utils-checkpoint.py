@@ -14,7 +14,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
+from scipy.spatial.distance import cdist
 from scgravity import filter_data, create_q_bin, calculate_mass
+import statsmodels.api as sm
 from node2vec import Node2Vec
 from infomap import Infomap
 from sknetwork.clustering import Louvain
@@ -35,6 +37,8 @@ import json
 from xgboost import XGBClassifier
 import optuna
 import time
+
+
 
 
 
@@ -160,7 +164,7 @@ def _extract_pair_features(G_train, u, v, densities):
         pair = tuple(sorted((id_u, id_v)))
 
         features[f'{algo}_density'] = densities[algo].get(pair, 0)
-        features[f'same_{algo}'] = 1 if id_u == id_v else 0
+        #features[f'same_{algo}'] = 1 if id_u == id_v else 0
 
     for emb in EMBEDDINGS:
         if emb in nu and emb in nv:
@@ -403,7 +407,7 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos"):
     P, nodes = get_gravity_null_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     # B = matrice de modularité débiaisée
@@ -429,7 +433,7 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos"):
     P, nodes = get_gravity_null_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     P_symetric = (P + P.T) / 2
@@ -449,7 +453,7 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="deepwalk"):
         return P_symetric[idx_u, idx_v]
 
     # Appel de l'algorithme développé dans MetaLouvain.py
-    partition = best_partition(G_train, resolution=1, null_model=my_matrix_null_model)
+    partition = best_partition(G_train, resolution=1.0, null_model=my_matrix_null_model)
     
     print("--- Diagnostic de l'objet partition ---")
     print(f"Nombre de nœuds assignés : {len(partition)}")
@@ -478,22 +482,86 @@ def _normalize_community_assignment(G, attr_name):
             
     nx.set_node_attributes(G, mapping, attr_name)
 
-def get_gravity_null_model(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
+
+def get_gravity_null_model(G, pos_attr='pos'):
+    """
+    Infère un modèle gravitaire (PPML) via Statsmodels.
+    Précis, stable et gère nativement les liens nuls.
+    """
+    nodes = list(G.nodes())
+    n = len(nodes)
+    
+    adj = nx.to_numpy_array(G, nodelist=nodes)
+    degrees = np.array([d for _, d in G.degree(nodes)], dtype=float)
+    coords = np.array([G.nodes[n][pos_attr] for n in nodes])
+    
+    dist_matrix = cdist(coords, coords, metric='euclidean')
+    mass_matrix = np.outer(degrees, degrees)
+    
+    iu = np.triu_indices(n, k=1)
+    
+    y = adj[iu]
+    dists = dist_matrix[iu]
+    masses = mass_matrix[iu]
+    
+    # Préparation du DataFrame pour la régression
+    df = pd.DataFrame({
+        'y': y,
+        'log_d': np.log(np.where(dists == 0, np.min(dists[dists > 0]) * 0.1, dists)),
+        'log_m': np.log(np.where(masses == 0, 1e-9, masses))
+    })
+    
+    # Inférence du modèle GLM Poisson (PPML) pour le modèle de gravité
+    X = sm.add_constant(df[['log_m', 'log_d']])
+    model = sm.GLM(df['y'], X, family=sm.families.Poisson()).fit()
+    
+    # Extraction des paramètres
+    intercept = model.params['const']
+    beta_mass = model.params['log_m']
+    gamma_dist = model.params['log_d']
+    
+    print(f"--- Modèle Gravitaire Inféré ---")
+    print(f"Friction distance (gamma) : {gamma_dist:.4f}")
+    print(f"Influence masses (beta)   : {beta_mass:.4f}")
+    
+    # Reconstruction de la matrice de probabilité Pij = exp(intercept + beta*log_m + gamma*log_d)
+    m_log_full = np.log(np.where(mass_matrix == 0, 1e-9, mass_matrix))
+    d_log_full = np.log(np.where(dist_matrix == 0, 1e-9, dist_matrix))
+    
+    P = np.exp(intercept + beta_mass * m_log_full + gamma_dist * d_log_full)
+    np.fill_diagonal(P, 0)
+    
+    # Vérification : comparaison à lespérance de lien 
+    A_sum = len(G.edges())
+    P_expected_sum = P.sum() / 2
+    normalization_factor = A_sum / P_expected_sum
+    
+    print(f"Vérification : Nb_liens du graphe VS espérance du Null Model = {normalization_factor:.6f}")
+    
+    return P, nodes
+
+def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
     """
     Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
     Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
     """
-    # Extraction des poids des arrêtes si il y en a, 1 sinon
-    od_data = {}
-    for u, v, d in G.edges(data=True):
-        weight = d.get(weight_attr, 1.0)
-        if u not in od_data: od_data[u] = {}
-        od_data[u][v] = weight
-
-    # Calcul des distances
     nodes = list(G.nodes())
     pos = nx.get_node_attributes(G, pos_attr)
-    
+
+    # Extraction des poids des arrêtes si il y en a, 1 sinon
+    od_data = {}
+    for u in nodes:
+        od_data[u] = {}
+        for v in nodes:
+            if u == v: 
+                od_data[u][v] = 1.0
+
+            if G.has_edge(u, v):
+                weight = G[u][v].get(weight_attr, 1.0)
+                od_data[u][v] = float(weight)
+            else:
+                od_data[u][v] = 1e-4
+    # Calcul des distances
     dist_data = {}
     for u in nodes:
         dist_data[u] = {}
@@ -504,9 +572,18 @@ def get_gravity_null_model(G, pos_attr, weight_attr='weight', nb_bins_target = 1
 
     # Pipeline scgravity : https://pypi.org/project/scgravity/
     od_data_clean = filter_data(od_data, dist_data)
-    custom_each_num = max(10, len(G.edges()) // nb_bins_target)
+
+    
+
+    custom_each_num = max(10, len(G.nodes())*(len(G.nodes())-1) // (2*nb_bins_target))
+    #custom_each_num = 10
     q_bin = create_q_bin(od_data_clean, dist_data, each_num=custom_each_num)
     m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
+
+    print(f"Q_hist : {Q_hist}")
+    #print(f"custom_each_num : {custom_each_num}")
+    #print(f"od_data_clean : {od_data_clean}")
+    #print(f"q_bin : {q_bin}")
 
     thresholds = list(q_bin['bin_left']) + [q_bin['bin_right'][-1]]
     n = len(nodes)

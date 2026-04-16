@@ -164,7 +164,7 @@ def _extract_pair_features(G_train, u, v, densities):
         pair = tuple(sorted((id_u, id_v)))
 
         features[f'{algo}_density'] = densities[algo].get(pair, 0)
-        features[f'same_{algo}'] = 1 if id_u == id_v else 0
+        #features[f'same_{algo}'] = 1 if id_u == id_v else 0
 
     for emb in EMBEDDINGS:
         if emb in nu and emb in nv:
@@ -407,7 +407,7 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="deepwalk"):
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos"):
     P, nodes = get_gravity_null_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     # B = matrice de modularité débiaisée
