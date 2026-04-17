@@ -1,3 +1,4 @@
+from numpy.linalg import norm
 from .MetaLouvain import *
 
 import random
@@ -15,6 +16,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
 from scipy.spatial.distance import cdist
+from scipy.optimize import newton
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
 from node2vec import Node2Vec
@@ -523,6 +525,7 @@ def get_gravity_null_model(G, pos_attr='pos'):
     print(f"--- Modèle Gravitaire Inféré ---")
     print(f"Friction distance (gamma) : {gamma_dist:.4f}")
     print(f"Influence masses (beta)   : {beta_mass:.4f}")
+    print(f"Cte de noramlisation (intercept)   : {intercept:.4f}")
     
     # Reconstruction de la matrice de probabilité Pij = exp(intercept + beta*log_m + gamma*log_d)
     m_log_full = np.log(np.where(mass_matrix == 0, 1e-9, mass_matrix))
@@ -540,7 +543,32 @@ def get_gravity_null_model(G, pos_attr='pos'):
     
     return P, nodes
 
-def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
+def optimize_scgravity_model(G, pos_attr, target=1.0, tol=0.01, max_iter=5):
+    """
+    Optimise min_weight pour que normalization_factor ≈ target (≈1)
+    """
+
+    min_weight = 1e-4
+    last_factor = None
+    iter = 0
+
+    for i in range(max_iter):
+        _, _, factor = get_gravity_null_model_scgravity(G, pos_attr, min_weight=min_weight)
+        last_factor = factor
+        iter = i
+
+        if abs(factor - target) < tol:
+            break
+
+        min_weight *= factor
+
+    print(f"min_weight final: {min_weight:.2e} |  nb iter = {iter}")
+
+    P, nodes, final_factor = get_gravity_null_model_scgravity(G, pos_attr, min_weight=min_weight, speak=True)
+
+    return P, nodes
+    
+def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', min_weight = 1e-4, speak = False, nb_bins_target = 15):
     """
     Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
     Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
@@ -560,7 +588,7 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
                 weight = G[u][v].get(weight_attr, 1.0)
                 od_data[u][v] = float(weight)
             else:
-                od_data[u][v] = 1e-4
+                od_data[u][v] = min_weight
     # Calcul des distances
     dist_data = {}
     for u in nodes:
@@ -580,7 +608,10 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
     q_bin = create_q_bin(od_data_clean, dist_data, each_num=custom_each_num)
     m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
 
-    print(f"Q_hist : {Q_hist}")
+    # print(f"Q_hist : {Q_hist}")
+    # for node_id in m_in.keys():
+    #     diff = m_in[node_id] - m_out.get(node_id)
+    #     print(f"Node {node_id}| Diff: {diff}")
     #print(f"custom_each_num : {custom_each_num}")
     #print(f"od_data_clean : {od_data_clean}")
     #print(f"q_bin : {q_bin}")
@@ -617,9 +648,10 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
     A_sum = len(G.edges())
     normalization_factor = A_sum / P.sum()
     P = P * (A_sum / P.sum())
-    print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
+    if speak :
+        print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
 
-    return P, nodes
+    return P, nodes, normalization_factor
 
 
 COMMUNITY_MAPPING = {
