@@ -18,8 +18,8 @@ from scipy.spatial.distance import cdist, pdist, squareform
 from scipy.optimize import minimize
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
-from NEMtropy import UndirectedGraph
-from NEMtropy import models_functions as mof
+#from NEMtropy import UndirectedGraph
+#from NEMtropy import models_functions as mof
 
 from node2vec import Node2Vec
 from infomap import Infomap
@@ -412,7 +412,7 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual", attr_name = "spatial_leiden"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     else : 
@@ -437,11 +437,11 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method
     
     labels = partition.membership
     node_to_community = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
-    nx.set_node_attributes(G_train, node_to_community, "spatial_leiden_id")
+    nx.set_node_attributes(G_train, node_to_community, f"{attr_name}_id")
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual", attr_name = "spatial_louvain"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     else : 
@@ -471,15 +471,17 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_metho
     print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
     print("---------------------------------------")
 
-    nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
+    nx.set_node_attributes(G_train, partition, f"{attr_name}_id")
     
     return G_train
 
 def _appendSpatialLeidenCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity",
+                                              attr_name = "spatial_leiden_scgravity")
 
 def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity",
+                                              attr_name = "spatial_louvain_scgravity")
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -658,11 +660,12 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', min_weig
             
             q_val = Q_hist[bin_idx]
             P[i, j] = m_out_vec[i] * m_in_vec[j] * q_val
+            P[j, i] = m_out_vec[j] * m_in_vec[i] * q_val
 
     # Normalisation pour que la somme de P soit égale à la somme de A
     A_sum = len(G.edges())
-    normalization_factor = A_sum / P.sum()
-    P = P * (A_sum / P.sum())
+    normalization_factor = 2* A_sum / P.sum()
+    P = P * normalization_factor
     if speak :
         print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
 
