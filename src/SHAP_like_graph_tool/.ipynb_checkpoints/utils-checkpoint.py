@@ -14,9 +14,13 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
-from scipy.spatial.distance import cdist
+from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.optimize import minimize
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
+from NEMtropy import UndirectedGraph
+from NEMtropy import models_functions as mof
+
 from node2vec import Node2Vec
 from infomap import Infomap
 from sknetwork.clustering import Louvain
@@ -50,7 +54,8 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', "spatial_leiden", "spatial_louvain"]
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
+"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -407,8 +412,11 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos"):
-    P, nodes = get_gravity_null_model(G_train, pos_attr)
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
+    if NullModel_method == "Manual" : 
+        P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
+    else : 
+        P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     # B = matrice de modularité débiaisée
     B = A - P
@@ -433,8 +441,11 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos"):
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos"):
-    P, nodes = get_gravity_null_model(G_train, pos_attr)
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
+    if NullModel_method == "Manual" : 
+        P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
+    else : 
+        P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     P_symetric = (P + P.T) / 2
 
@@ -463,6 +474,12 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos"):
     nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
     
     return G_train
+
+def _appendSpatialLeidenCommunities_scgravity(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+
+def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -523,6 +540,7 @@ def get_gravity_null_model(G, pos_attr='pos'):
     print(f"--- Modèle Gravitaire Inféré ---")
     print(f"Friction distance (gamma) : {gamma_dist:.4f}")
     print(f"Influence masses (beta)   : {beta_mass:.4f}")
+    print(f"Cte de noramlisation (intercept)   : {intercept:.4f}")
     
     # Reconstruction de la matrice de probabilité Pij = exp(intercept + beta*log_m + gamma*log_d)
     m_log_full = np.log(np.where(mass_matrix == 0, 1e-9, mass_matrix))
@@ -540,7 +558,32 @@ def get_gravity_null_model(G, pos_attr='pos'):
     
     return P, nodes
 
-def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_target = 15):
+def optimize_scgravity_model(G, pos_attr, target=1.0, tol=0.01, max_iter=5):
+    """
+    Optimise min_weight pour que normalization_factor ≈ target (≈1)
+    """
+
+    min_weight = 1e-4
+    last_factor = None
+    iter = 0
+
+    for i in range(max_iter):
+        _, _, factor = get_gravity_null_model_scgravity(G, pos_attr, min_weight=min_weight)
+        last_factor = factor
+        iter = i
+
+        if abs(factor - target) < tol:
+            break
+
+        min_weight *= factor
+
+    print(f"min_weight final: {min_weight:.2e} |  nb iter = {iter}")
+
+    P, nodes, final_factor = get_gravity_null_model_scgravity(G, pos_attr, min_weight=min_weight, speak=True)
+
+    return P, nodes
+    
+def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', min_weight = 1e-4, speak = False, nb_bins_target = 15):
     """
     Calcule la matrice du modèle nul spatial (Pij) à partir d'un graphe NetworkX.
     Suppose que les nœuds ont des attributs 'pos' (tuple ou liste [x, y]).
@@ -560,7 +603,7 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
                 weight = G[u][v].get(weight_attr, 1.0)
                 od_data[u][v] = float(weight)
             else:
-                od_data[u][v] = 1e-4
+                od_data[u][v] = min_weight
     # Calcul des distances
     dist_data = {}
     for u in nodes:
@@ -580,7 +623,10 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
     q_bin = create_q_bin(od_data_clean, dist_data, each_num=custom_each_num)
     m_in, m_out, Q_hist, Q_std = calculate_mass(od_data_clean, q_bin)
 
-    print(f"Q_hist : {Q_hist}")
+    # print(f"Q_hist : {Q_hist}")
+    # for node_id in m_in.keys():
+    #     diff = m_in[node_id] - m_out.get(node_id)
+    #     print(f"Node {node_id}| Diff: {diff}")
     #print(f"custom_each_num : {custom_each_num}")
     #print(f"od_data_clean : {od_data_clean}")
     #print(f"q_bin : {q_bin}")
@@ -617,10 +663,216 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', nb_bins_
     A_sum = len(G.edges())
     normalization_factor = A_sum / P.sum()
     P = P * (A_sum / P.sum())
-    print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
+    if speak :
+        print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
+
+    return P, nodes, normalization_factor
+
+
+def get_gravity_null_model_nemtropy(G, pos_attr='pos', speak=False):
+    """
+    Calcule la matrice de probabilités P du modèle nul gravitaire spatial ac la lib NEMtropy
+    """
+    adj_obs = nx.to_numpy_array(G).astype(np.float64)
+    nodes_list = list(G.nodes())
+    n_nodes = len(nodes_list)
+    obs_edges_count = G.number_of_edges()
+    obs_degrees = adj_obs.sum(axis=1).astype(np.float64)
+    obs_degrees[obs_degrees == 0] = 1e-10
+    
+    positions = np.array([G.nodes[n][pos_attr] for n in nodes_list])
+    dist_matrix = squareform(pdist(positions)).astype(np.float64)
+    dist_matrix = np.exp(-1.0 * dist_matrix)
+    np.fill_diagonal(dist_matrix, 0)
+    
+    graph = UndirectedGraph(adjacency=adj_obs)
+
+    graph.strength_sequence = obs_degrees
+
+    graph.solve_tool(model='crema-sparse', adjacency=dist_matrix, method='fixed-point',tol=1e-04,
+                         full_return=True, max_steps=2000, verbose=False)
+
+    print("--- Inspection de l'objet UndirectedGraph ---")
+    attrs = [attr for attr in dir(graph) if not attr.startswith('__') and not callable(getattr(graph, attr))]
+    for attr in attrs:
+        val = getattr(graph, attr)
+        # On affiche un résumé pour ne pas flooder la console
+        summary = f"{type(val)} (shape/len: {getattr(val, 'shape', len(val) if hasattr(val, '__len__') else 'N/A')})"
+        print(f"{attr}: {summary}")
+
+    print("\n--- Diagnostic des arguments du solveur ---")
+    if hasattr(graph, 'args'):
+        print(f"Nombre d'arguments dans 'args': {len(graph.args)}")
+
+    def inspect_nemtropy_expert(graph):
+        """
+        Analyse profonde de l'objet UndirectedGraph pour identifier 
+        la source du problème de convergence/échelle.
+        """
+        print("="*60)
+        print("🔍 AUTOPSIE EXPERTE DU MODÈLE NEMTROPY")
+        print("="*60)
+
+        # 1. Identification de la Solution (Les multiplicateurs)
+        print("\n[1] PARAMÈTRES DE LA SOLUTION (X_i)")
+        sol_candidates = ['beta', 'solution_array', 'x', 'solution']
+        found_sol = False
+        for cand in sol_candidates:
+            if hasattr(graph, cand) and getattr(graph, cand) is not None:
+                val = getattr(graph, cand)
+                print(f"✅ {cand:15}: Moyenne={np.mean(val):.4f}, Min={np.min(val):.4f}, Max={np.max(val):.4f}")
+                found_sol = True
+        if not found_sol:
+            print("❌ AUCUNE SOLUTION TROUVÉE : Le solveur n'a rien enregistré.")
+
+        # 2. Vérification des Contraintes (Cibles)
+        print("\n[2] ÉTAT DES CONTRAINTES (DEGRÉS)")
+        if hasattr(graph, 'strength_sequence'):
+            s = graph.strength_sequence
+            print(f"🎯 Cibles (k_i)   : Somme={np.sum(s)/2:.2f}, Moyenne={np.mean(s):.2f}")
+        if hasattr(graph, 'expected_stregth_seq'):
+            e = graph.expected_stregth_seq
+            print(f"📈 Attendues (<k>): Somme={np.sum(e)/2:.2f}, Moyenne={np.mean(e):.2f}")
+        
+        # 3. Diagnostic de l'Erreur
+        print("\n[3] DIAGNOSTIC DE CONVERGENCE")
+        for err_attr in ['error', 'error_strength', 'relative_error_strength']:
+            if hasattr(graph, err_attr):
+                print(f"⚠️ {err_attr:23}: {getattr(graph, err_attr)}")
+
+        # 4. Analyse des entrées (The "Hidden" Args)
+        print("\n[4] STRUCTURE INTERNE (ARGS)")
+        if hasattr(graph, 'args') and graph.args is not None:
+            print(f"Nombre d'arguments dans 'args' : {len(graph.args)}")
+            for i, arg in enumerate(graph.args):
+                t = type(arg)
+                m = np.mean(arg) if hasattr(arg, 'mean') else "N/A"
+                print(f"   - Arg[{i}] ({t.__name__}): Moyenne={m}")
+
+        print("\n" + "="*60)
+
+    inspect_nemtropy_expert(graph)
+
+    return P, graph.sol[:-1]
+
+def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
+    """
+    Calcule le modèle nul gravitaire via une régression logistique dyadique. Infère conjointement le beta spatial et les fitness (alphas).
+    """
+    nodes = list(G.nodes())
+    n = len(nodes)
+    adj = nx.to_numpy_array(G)
+    pos = nx.get_node_attributes(G, pos_attr)
+    
+    rows, cols = np.triu_indices(n, k=1) # indices
+    
+    # Calcul des distances euclidiennes pour chaque paire
+    pos_array = np.array([pos[u] for u in nodes])
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    distances_flat = dist_matrix[rows, cols]
+    links_flat = adj[rows, cols]
+
+    # 2. Construction de la matrice de design X
+    # On crée une colonne pour chaque noeud (alphas) et une pour la distance (beta)
+    # Pour chaque paire (i, j), les colonnes i et j valent 1, les autres 0.
+    num_dyads = len(links_flat)
+    X = np.zeros((num_dyads, n + 1))
+    
+    # On remplit les indices des noeuds
+    X[np.arange(num_dyads), rows] = 1
+    X[np.arange(num_dyads), cols] = 1
+    # On remplit la distance (on met -dist pour que beta soit positif si dissuasion)
+    X[:, -1] = -distances_flat
+
+    # 3. Inférence par Maximum de Vraisemblance (Logit)
+    if speak:
+        print(f"Lancement de l'inférence pour {n} noeuds ({num_dyads} dyades)...")
+    
+    model = sm.Logit(links_flat, X)
+    # L-BFGS est robuste pour les modèles avec beaucoup de paramètres
+    result = model.fit(method='lbfgs', maxiter=1000, disp=speak)
+    
+    # 4. Extraction des paramètres
+    alphas = result.params[:n]
+    beta = result.params[-1]
+    
+    # 5. Reconstruction de la matrice de probabilités P
+    # theta_ij = alpha_i + alpha_j - beta * d_ij
+    theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - beta * dist_matrix
+    P = 1 / (1 + np.exp(-theta))
+    np.fill_diagonal(P, 0)
+    
+    if speak:
+        obs_degrees = adj.sum(axis=1)
+        exp_degrees = P.sum(axis=1)
+        
+        corr = np.corrcoef(obs_degrees, exp_degrees)[0, 1]
+        mae = np.mean(np.abs(obs_degrees - exp_degrees))
+        
+        upper_idx = np.triu_indices(len(obs_degrees), k=1)
+        dists = dist_matrix[upper_idx]
+        p_vals = P[upper_idx]
+        actual_links = adj[upper_idx]
+
+        print(f"--- Rapport de Cohérence ---")
+        print(f"Corrélation Obs/Exp : {corr:.6f}")
+        print(f"MAE sur les degrés : {mae:.4f}")
+        
+        plt.figure(figsize=(15, 5))
+        
+        # Plot 1: Calibration
+        plt.subplot(1, 3, 1)
+        plt.scatter(obs_degrees, exp_degrees, alpha=0.5)
+        plt.plot([obs_degrees.min(), obs_degrees.max()], [obs_degrees.min(), obs_degrees.max()], 'r--')
+        plt.title("Calibration des Degrés")
+        plt.xlabel("Degré Observé")
+        plt.ylabel("Degré Attendu")
+        
+        # Plot 2: Résidus
+        plt.subplot(1, 3, 2)
+        plt.hist(obs_degrees - exp_degrees, bins=20)
+        plt.title("Distribution des Erreurs (Obs - Exp)")
+        
+        # Plot 3: Distance Decay (binned)
+        # Plot 3: Distance Decay (binned) avec Ratios d'effectifs
+        ax3 = plt.subplot(1, 3, 3)
+        bins = np.linspace(dists.min(), dists.max(), 20)
+        bin_idx = np.digitize(dists, bins)
+        bin_centers = bins[:-1] + np.diff(bins) / 2
+        total_pairs = len(dists)
+        
+        obs_trend = []
+        exp_trend = []
+        for i in range(1, len(bins)):
+            mask = (bin_idx == i)
+            if np.any(mask):
+                obs_trend.append(actual_links[mask].mean())
+                exp_trend.append(p_vals[mask].mean())
+                # Calcul du ratio pour l'affichage
+                ratio = (np.sum(mask) / total_pairs)*100
+                label = f"{ratio:.2g}" if ratio >= 0.1 else f"{ratio:.0e}"
+                ax3.annotate(label, xy=(bin_centers[i-1], obs_trend[-1]), 
+                             xytext=(0, -8), textcoords="offset points",
+                             va='top', ha='center', fontsize=8, color='black', alpha=0.8)
+            else:
+                obs_trend.append(0); exp_trend.append(0)
+
+        ax3.plot(bin_centers, obs_trend, 'bo-', label='Observed (Freq)')
+        ax3.plot(bin_centers, exp_trend, 'rx--', label='Model (Pij)')
+        ax3.set_xlabel("Distance d_ij")
+        ax3.set_ylabel("Probabilité de connexion P(Lien)")
+        ax3.set_title("Validation de la Friction Spatiale\n(% du total des paires sous les points)")
+        ax3.legend()
+       
+        plt.tight_layout()
+        plt.show()
+    
+    # Normalisation pour que la somme de P soit égale à la somme de A
+    A_sum = len(G.edges())
+    normalization_factor = 2*A_sum / P.sum()
+    print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
 
     return P, nodes
-
 
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
@@ -630,7 +882,9 @@ COMMUNITY_MAPPING = {
     'surprise': _appendSurpriseCommunities,
     'significance': _appendSignificanceCommunities,
     "spatial_leiden" : _appendSpatialLeidenCommunities,
-    "spatial_louvain" : _appendSpatialLouvainCommunities
+    "spatial_louvain" : _appendSpatialLouvainCommunities,
+    "spatial_leiden_scgravity" : _appendSpatialLeidenCommunities_scgravity,
+    "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity
 }
 
 def computeCommunityFeatures(G_train, algos="All"):
