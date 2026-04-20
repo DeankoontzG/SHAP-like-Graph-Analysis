@@ -15,11 +15,11 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
 from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.optimize import minimize
+from scipy.optimize import root_scalar, minimize_scalar
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
-#from NEMtropy import UndirectedGraph
-#from NEMtropy import models_functions as mof
+from NEMtropy import UndirectedGraph
+from NEMtropy import models_functions as mof
 
 from node2vec import Node2Vec
 from infomap import Infomap
@@ -52,7 +52,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
-"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity"]
+"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity"
+"spatial_leiden_wrdb","spatial_louvain_wrdb"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -409,9 +410,13 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual", attr_name = "spatial_leiden"):
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
+    elif NullModel_method == "Manual_Iterative":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "WithReelDegreesBiais":
+        P, nodes = get_gravity_null_model(G_train, pos_attr)
     else : 
         P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
@@ -434,13 +439,17 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method
     
     labels = partition.membership
     node_to_community = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
-    nx.set_node_attributes(G_train, node_to_community, f"{attr_name}_id")
+    nx.set_node_attributes(G_train, node_to_community, "spatial_leiden_id")
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual", attr_name = "spatial_louvain"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual_Iterative"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
+    elif NullModel_method == "Manual_Iterative":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "WithReelDegreesBiais":
+        P, nodes = get_gravity_null_model(G_train, pos_attr)
     else : 
         P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
@@ -468,17 +477,21 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_metho
     print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
     print("---------------------------------------")
 
-    nx.set_node_attributes(G_train, partition, f"{attr_name}_id")
+    nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
     
     return G_train
 
 def _appendSpatialLeidenCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity",
-                                              attr_name = "spatial_leiden_scgravity")
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+
+def _appendSpatialLeidenCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "WithReelDegreesBiais")
 
 def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity",
-                                              attr_name = "spatial_louvain_scgravity")
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+
+def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "WithReelDegreesBiais")
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -502,7 +515,6 @@ def _normalize_community_assignment(G, attr_name):
 def get_gravity_null_model(G, pos_attr='pos'):
     """
     Infère un modèle gravitaire (PPML) via Statsmodels.
-    Précis, stable et gère nativement les liens nuls.
     """
     nodes = list(G.nodes())
     n = len(nodes)
@@ -657,12 +669,11 @@ def get_gravity_null_model_scgravity(G, pos_attr, weight_attr='weight', min_weig
             
             q_val = Q_hist[bin_idx]
             P[i, j] = m_out_vec[i] * m_in_vec[j] * q_val
-            P[j, i] = m_out_vec[j] * m_in_vec[i] * q_val
 
     # Normalisation pour que la somme de P soit égale à la somme de A
     A_sum = len(G.edges())
-    normalization_factor = 2* A_sum / P.sum()
-    P = P * normalization_factor
+    normalization_factor = A_sum / P.sum()
+    P = P * (A_sum / P.sum())
     if speak :
         print(f"Null Model inféré normalisé par un facteur de {normalization_factor}")
 
@@ -761,27 +772,29 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
     """
     nodes = list(G.nodes())
     n = len(nodes)
-    adj = nx.to_numpy_array(G)
+    adj = nx.to_numpy_array(G) # Dim N*N
     pos = nx.get_node_attributes(G, pos_attr)
     
-    rows, cols = np.triu_indices(n, k=1) # indices
+    rows, cols = np.triu_indices(n, k=1) # Deux vecteurs de taille M = (N * (N-1) / 2). vecteurs plats
     
     # Calcul des distances euclidiennes pour chaque paire
-    pos_array = np.array([pos[u] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
-    distances_flat = dist_matrix[rows, cols]
-    links_flat = adj[rows, cols]
+    pos_array = np.array([pos[u] for u in nodes]) # Forme : Matrice (N, 2)
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2) # Forme : Matrice (N, N)
+    distances_flat = dist_matrix[rows, cols] # Dim M, qui va chercher sa valeur dans dist_matrix selon la valeur de row[200] par ex
+    links_flat = adj[rows, cols] # Dim M
 
     # 2. Construction de la matrice de design X
     # On crée une colonne pour chaque noeud (alphas) et une pour la distance (beta)
     # Pour chaque paire (i, j), les colonnes i et j valent 1, les autres 0.
     num_dyads = len(links_flat)
-    X = np.zeros((num_dyads, n + 1))
+    X = np.zeros((num_dyads, n + 1)) # Dim M, N+1
     
     # On remplit les indices des noeuds
-    X[np.arange(num_dyads), rows] = 1
-    X[np.arange(num_dyads), cols] = 1
-    # On remplit la distance (on met -dist pour que beta soit positif si dissuasion)
+    X[np.arange(num_dyads), rows] = 1 # Pour chaque élément de l'axe de taille M (paires possibles), 
+                                      # on met un 1 uniquement dans la colonne correspondant au noeud visé
+    X[np.arange(num_dyads), cols] = 1 # On obtient donc une matrice où chaque ligne cible une paire, et n'a 1
+                                      # que sur chaque noeud de la paire concernée
+    # On remplit la distance dans une dernière colonne (on met -dist pour que beta soit positif si dissuasion)
     X[:, -1] = -distances_flat
 
     # 3. Inférence par Maximum de Vraisemblance (Logit)
@@ -803,16 +816,26 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
     np.fill_diagonal(P, 0)
     
     if speak:
-        obs_degrees = adj.sum(axis=1)
-        exp_degrees = P.sum(axis=1)
+        gravity_inference_health_check(adj, P, dist_matrix)
+    
+    # Normalisation pour que la somme de P soit égale à la somme de A
+    A_sum = len(G.edges())
+    normalization_factor = 2*A_sum / P.sum()
+    print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
+
+    return P, nodes
+
+def gravity_inference_health_check(adjacency_mtx, P_mtx, dist_mtx):
+        obs_degrees = adjacency_mtx.sum(axis=1)
+        exp_degrees = P_mtx.sum(axis=1)
         
         corr = np.corrcoef(obs_degrees, exp_degrees)[0, 1]
         mae = np.mean(np.abs(obs_degrees - exp_degrees))
         
         upper_idx = np.triu_indices(len(obs_degrees), k=1)
-        dists = dist_matrix[upper_idx]
-        p_vals = P[upper_idx]
-        actual_links = adj[upper_idx]
+        dists = dist_mtx[upper_idx]
+        p_vals = P_mtx[upper_idx]
+        actual_links = adjacency_mtx[upper_idx]
 
         print(f"--- Rapport de Cohérence ---")
         print(f"Corrélation Obs/Exp : {corr:.6f}")
@@ -866,13 +889,118 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
        
         plt.tight_layout()
         plt.show()
-    
-    # Normalisation pour que la somme de P soit égale à la somme de A
-    A_sum = len(G.edges())
-    normalization_factor = 2*A_sum / P.sum()
-    print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
 
-    return P, nodes
+def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak = False):
+    nodes = list(G.nodes())
+    n = len(nodes)
+    adj = nx.to_numpy_array(G)
+    degrees = np.sum(adj, axis=1)
+    
+    # Matrice de distance (N, N)
+    pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    
+    # Initialisation des paramètres
+    alphas = np.zeros(n)
+    beta = 1.0
+    
+    def func_alpha_i(alpha_i, other_alphas, dist_row_i, current_beta, target_k):
+        """
+        Calcule la valeur de f(alpha_i) et sa dérivée pour la méthode de Newton.
+        f(alpha_i) = somme(probs) - k_i
+        """
+        theta = alpha_i + other_alphas - current_beta * dist_row_i
+        probs = 1 / (1 + np.exp(-theta))
+        
+        val = np.sum(probs) - target_k
+        # Dérivée d'une somme de sigmoïdes
+        grad = np.sum(probs * (1 - probs)) # Vérifié sur papier, c'est vrai.
+        return val, grad
+      
+    def total_log_likelihood_beta(b, current_alphas):
+        """ Log-vraisemblance négative pour l'optimisation de beta """
+        # theta_ij = alpha_i + alpha_j - beta * d_ij
+        theta = current_alphas[:, np.newaxis] + current_alphas[np.newaxis, :] - b * dist_matrix
+        # log(1 + exp(theta)) via logaddexp pour la stabilité
+        log_q = np.logaddexp(0, theta)
+        # On ne prend que le triangle supérieur (réseau non dirigé)
+        ll = np.sum(np.triu(adj * theta - log_q, k=1))
+        return -ll
+
+    # --- BOUCLE PRINCIPALE ---
+
+    for iteration in range(max_iter):
+        old_alphas = alphas.copy()
+        
+        # 1. Mise à jour séquentielle des alphas (Descente de coordonnées)
+        for _ in range(5):
+            # theta_ij = alpha_i + alpha_j - beta * d_ij
+            theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - beta * dist_matrix
+            
+            P = 1 / (1 + np.exp(-theta))
+            np.fill_diagonal(P, 0)
+            
+            f_x = np.sum(P, axis=1) - degrees
+            
+            # Hessienne (Diagonale) : Somme des p*(1-p)
+            f_prime = np.sum(P * (1 - P), axis=1)
+            
+            # Mise à jour de Newton : x = x - f(x)/f'(x)
+            alphas -= f_x / (f_prime + 1e-10)
+        """ 
+        for i in range(n):
+            if degrees[i] == 0:
+                alphas[i] = -20.0 # Valeur arbitrairement basse pour p -> 0
+                continue
+            
+            # Préparation des données pour le noeud i (on exclut j=i)
+            mask = np.ones(n, dtype=bool)
+            mask[i] = False
+            
+            # On passe les constantes nécessaires à func_alpha_i
+            res = root_scalar(
+                f = lambda x: func_alpha_i(
+                    alpha_i=x, 
+                    other_alphas=alphas[mask], 
+                    dist_row_i=dist_matrix[i, mask], 
+                    current_beta=beta, 
+                    target_k=degrees[i]
+                ),
+                x0=alphas[i], 
+                fprime=True, # L'algo s'attend à recevoir f(x), f'(x)
+                method='newton'
+            )
+            alphas[i] = res.root
+        """
+            
+        # 2. Mise à jour de beta
+        res_beta = minimize_scalar(
+            total_log_likelihood_beta, 
+            args=(alphas,), 
+            bounds=(0, 20), 
+            method='bounded'
+        )
+        beta = res_beta.x
+        
+        # Convergence
+        theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - beta * dist_matrix
+        current_P = 1 / (1 + np.exp(-theta))
+        np.fill_diagonal(current_P, 0)
+        
+        predicted_degrees = np.sum(current_P, axis=1)
+        mae_degrees = np.mean(np.abs(predicted_degrees - degrees))
+        
+        if iteration %100 == 0:
+            print(f"Iteration {iteration}: MAE = {mae_degrees:.6f}, Beta = {beta:.4f}")
+        
+        if mae_degrees < tol:
+            break
+
+    print(f"Modèle gravitaire inféré, avec une MAE de {mae_degrees}")     
+    if speak : 
+        gravity_inference_health_check(adj, current_P, dist_matrix)   
+    
+    return current_P, nodes
 
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
@@ -884,8 +1012,11 @@ COMMUNITY_MAPPING = {
     "spatial_leiden" : _appendSpatialLeidenCommunities,
     "spatial_louvain" : _appendSpatialLouvainCommunities,
     "spatial_leiden_scgravity" : _appendSpatialLeidenCommunities_scgravity,
-    "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity
+    "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
+    "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
+    "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais
 }
+
 
 def computeCommunityFeatures(G_train, algos="All"):
     print("\n--- Enrichissement du Graphe avec les Communautés ---")
