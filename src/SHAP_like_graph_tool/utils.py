@@ -52,7 +52,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 
 EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
-"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity"
+"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity",
 "spatial_leiden_wrdb","spatial_louvain_wrdb"]
 METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
@@ -410,7 +410,7 @@ def _appendGraphToolSBM(G_train):
     _normalize_community_assignment(G_train, "sbm_id")
 
 
-def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual"):
+def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_leiden_id",NullModel_method = "Manual_iterative"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "Manual_Iterative":
@@ -439,11 +439,11 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", NullModel_method
     
     labels = partition.membership
     node_to_community = {nodes[i]: int(labels[i]) for i in range(len(nodes))}
-    nx.set_node_attributes(G_train, node_to_community, "spatial_leiden_id")
+    nx.set_node_attributes(G_train, node_to_community, attr_name)
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_method = "Manual_Iterative"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "Manual_Iterative"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "Manual_Iterative":
@@ -477,21 +477,21 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", NullModel_metho
     print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
     print("---------------------------------------")
 
-    nx.set_node_attributes(G_train, partition, "spatial_louvain_id")
+    nx.set_node_attributes(G_train, partition, attr_name)
     
     return G_train
 
 def _appendSpatialLeidenCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_leiden_scgravity_id" ,NullModel_method = "scgravity")
 
 def _appendSpatialLeidenCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, NullModel_method = "WithReelDegreesBiais")
+    G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_leiden_wrdb_id" , NullModel_method = "WithReelDegreesBiais")
 
 def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "scgravity")
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_scgravity_id" , NullModel_method = "scgravity")
 
 def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, NullModel_method = "WithReelDegreesBiais")
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_wrdb_id" , NullModel_method = "WithReelDegreesBiais")
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -822,7 +822,8 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
     A_sum = len(G.edges())
     normalization_factor = 2*A_sum / P.sum()
     print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
-
+    print(f"Alpha moyen = {np.mean(alphas):.4f}, beta = {beta_final:.6f}")
+    
     return P, nodes
 
 def gravity_inference_health_check(adjacency_mtx, P_mtx, dist_mtx):
@@ -934,19 +935,21 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
         
         # 1. Mise à jour séquentielle des alphas (Descente de coordonnées)
         for _ in range(5):
-            # theta_ij = alpha_i + alpha_j - beta * d_ij
             theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - beta * dist_matrix
+            # Clipping de theta pour éviter exp(large)
+            theta = np.clip(theta, -50, 50) 
             
             P = 1 / (1 + np.exp(-theta))
             np.fill_diagonal(P, 0)
             
             f_x = np.sum(P, axis=1) - degrees
+            # f_prime est la Hessienne
+            f_prime = np.sum(P * (1 - P), axis=1) + 1e-5
             
-            # Hessienne (Diagonale) : Somme des p*(1-p)
-            f_prime = np.sum(P * (1 - P), axis=1)
-            
-            # Mise à jour de Newton : x = x - f(x)/f'(x)
-            alphas -= f_x / (f_prime + 1e-10)
+            # MISE À JOUR BRIDÉE : On ne bouge pas de plus de 2.0 par étape
+            step = f_x / f_prime
+            alphas -= 0.5 * np.clip(step, -2.0, 2.0)
+       
         """ 
         for i in range(n):
             if degrees[i] == 0:
@@ -996,7 +999,22 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
         if mae_degrees < tol:
             break
 
-    print(f"Modèle gravitaire inféré, avec une MAE de {mae_degrees}")     
+    """
+    print(f"Distances : min={dist_matrix.min():.2f}, max={dist_matrix.max():.2f}, mean={dist_matrix.mean():.2f}")
+    test_beta = 1.0
+    test_ll = total_log_likelihood_beta(test_beta, alphas)
+    print(f"LL pour beta=1.0 : {test_ll}")
+    test_ll_0 = total_log_likelihood_beta(0.0, alphas)
+    print(f"LL pour beta=0.0 : {test_ll_0}")
+
+    if test_ll > test_ll_0:
+        print("ALERTE : La vraisemblance est meilleure à beta=0 qu'à beta=1. Le problème est dans les données ou le signe de LL.")
+    """
+
+    print(f"Modèle gravitaire inféré, avec une MAE de {mae_degrees}, alpha moy = {np.mean(alphas):.4f} et beta = {beta}")  
+    A_sum = len(G.edges())
+    normalization_factor = 2*A_sum / P.sum()
+    print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
     if speak : 
         gravity_inference_health_check(adj, current_P, dist_matrix)   
     

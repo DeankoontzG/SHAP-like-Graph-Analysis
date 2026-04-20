@@ -30,6 +30,7 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         if GT is not None and 'GT_pos' in GT:
             for i, node_id in enumerate(G.nodes()):
                 G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
+
        
         G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
         G_train, G_test = hide_graph_links(G_kept, test_size=0.15)

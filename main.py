@@ -64,7 +64,7 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 if __name__ == "__main__":
 
     execution_stats = []
-    for sbm_ratio in np.arange(1.00, -0.25, -0.25):
+    for sbm_ratio in np.arange(0.00, 1.10, 0.10):
         
         G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
         G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
