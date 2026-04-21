@@ -314,16 +314,50 @@ def computeStructureFeatures(G_train):
 ## FONCTIONS POUR INFERENCE DE COMMUNAUTES ##
 #############################################
 
-def _appendLouvainCommunities(G_train):
-    communities = nx.community.louvain_communities(G_train, seed=42)
+def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
+    """
+    Vérifie si la partition contient au moins K_min communautés 'significatives' en termes de nombre de liens internes (%age du nb de liens totaux du graphe)
+    """
+    community_edge_counts = {}
+    total_edges = G.number_of_edges()
+    min_edges = total_edges * min_edge_ratio
+    
+    for comm_id in set(partition_dict.values()):
+        community_edge_counts[comm_id] = 0
+        
+    for u, v in G.edges():
+        if partition_dict[u] == partition_dict[v]:
+            community_edge_counts[partition_dict[u]] += 1
+            
+    robust_commus = [count for count in community_edge_counts.values() if count >= min_edges]
+    
+    return len(robust_commus) >= K_min
 
-    node_to_community = {} 
-    for i, community in enumerate(communities):
-        for node in community:
-            node_to_community[node] = i
+def _appendLouvainCommunities(G_train, K_min=3, min_edge_ratio=0.01):
+    res = 1.0
+    attempts = 0
+    
+    valid = False
+    partition_dict = {}
+
+    while not valid and attempts < 12:
+        communities_list = nx.community.louvain_communities(G_train, seed=42, resolution=res)
+        
+        node_to_community = {} 
+        for i, community in enumerate(communities_list):
+            for node in community:
+                node_to_community[node] = i
+        
+        valid = is_partition_robust(G_train, node_to_community, K_min=K_min, min_edge_ratio=min_edge_ratio)
+        
+        if not valid:
+            res *= 1.2
+            attempts += 1
 
     nx.set_node_attributes(G_train, node_to_community, "louvain_id")
     _normalize_community_assignment(G_train, "louvain_id")
+    
+    return G_train
 
 
 def _appendLeidenCommunities(G_train):
@@ -470,7 +504,15 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         return P_symetric[idx_u, idx_v]
 
     # Appel de l'algorithme développé dans MetaLouvain.py
-    partition = best_partition(G_train, resolution=1.0, null_model=my_matrix_null_model)
+    current_res = 1.0
+    partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
+    
+    attempts = 0
+    # Tant que la partition n'est pas robuste, on augmente la résolution
+    while not is_partition_robust(G_train, partition, K_min=3, min_edge_ratio=0.01) and attempts < 12:
+        current_res *= 1.2
+        partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
+        attempts += 1
     
     print("--- Diagnostic de l'objet partition ---")
     print(f"Nombre de nœuds assignés : {len(partition)}")
