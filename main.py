@@ -66,8 +66,8 @@ if __name__ == "__main__":
     execution_stats = []
     for sbm_ratio in np.arange(0.00, 1.10, 0.10):
         
-        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
+        G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
+        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
         print("######################################")
         print(f"#### graph {G_name_bis} :  ####")
         print("######################################")
