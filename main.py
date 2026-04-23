@@ -66,10 +66,10 @@ if __name__ == "__main__":
     execution_stats = []
     for sbm_ratio in np.arange(0.00, 1.10, 0.10):
         
-        G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')   
-        G_name_bis = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')  
+        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_1".replace('.', '_')
+        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')
         print("######################################")
-        print(f"#### graph {G_name_bis} :  ####")
+        print(f"#### graph {G_name} :  ####")
         print("######################################")
         
         path = f"graph_library/{G_name}.graphml"
@@ -81,7 +81,7 @@ if __name__ == "__main__":
             print(f"Erreur lors du chargement de {path} : {e}")
         
         start_time = time.time()
-        gp.execute(G, G_name_bis, add_P_matrix = True)                
+        gp.compute_commus(G, G_name_bis)                
         end_time = time.time()
         duration = end_time - start_time
 
@@ -98,6 +98,15 @@ if __name__ == "__main__":
 
 
     df = pd.DataFrame(execution_stats)
+    print("\n" + "="*50)
+    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("="*50)
+    print(df.to_string(index=False))
+
+    all_results = analyze_commus(G_name_short = "artificial_graph_sbmv4", nb_iterations=1, name_export_results="Test"):
+
+
+    df_bis = pd.DataFrame(execution_stats)
     print("\n" + "="*50)
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
