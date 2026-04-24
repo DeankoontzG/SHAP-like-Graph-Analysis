@@ -1,0 +1,32 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+
+# --- Jupyter Notebooks ---
+.ipynb_checkpoints
+
+# --- Machine Learning & Data ---
+# On ignore les gros datasets et les modèles (trop lourds pour Git) => Pour l'instant on les garde
+# outputs/datasets/*.pt
+# outputs/datasets/*.csv
+# outputs/models/*.pth
+# outputs/models/*.json
+# outputs/models/*.joblib
+
+# --- Système ---
+.DS_Store
+Thumbs.db
+
+# --- IDE ---
+.vscode/
+.idea/
+
+# --- Autres ---
+myoutfile
+/graph_library
+/outputs
