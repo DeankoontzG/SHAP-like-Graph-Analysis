@@ -15,7 +15,7 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
 from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.optimize import root_scalar, minimize_scalar
+from scipy.optimize import root_scalar, minimize_scalar, minimize
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
 from NEMtropy import UndirectedGraph
@@ -53,7 +53,8 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain_manualreg", "spatial_louvain", "spatial_louvain_scgravity","spatial_louvain_wrdb"]
+'louvain', "spatial_louvain_manualreg", "spatial_louvain", "spatial_louvain_scgravity","spatial_louvain_wrdb",
+"spatial_louvain_radiation"]
 METRICS_NODE = [] #[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -451,6 +452,8 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
+    elif NullModel_method == "Radiation":
+        P, nodes = get_radiation_null_model_iterative(G_train, pos_attr)
     else : 
         P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
@@ -537,6 +540,10 @@ def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_
 
 def _appendSpatialLouvainCommunities_ManualRegr(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualreg_id" , NullModel_method = "ManualReg")
+
+def _appendSpatialLouvainCommunities_radiation(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_radiation_id" , NullModel_method = "Radiation")
+
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -1065,6 +1072,90 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     
     return current_P, nodes
 
+
+def get_radiation_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak=False):
+    nodes = list(G.nodes())
+    n = len(nodes)
+    adj = nx.to_numpy_array(G)
+    degrees = np.sum(adj, axis=1)
+    target_sum = np.sum(degrees)
+
+    # 1. Pré-calcul des distances et des masques s_ij
+    pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    # mask[i, j, k] est vrai si k est plus proche de i que ne l'est j
+    masks = [dist_matrix[i, :][:, np.newaxis] > dist_matrix[i, :][np.newaxis, :] for i in range(n)]
+
+    # Variables globales pour le monitoring via callback
+    iteration_data = {'count': 0, 'last_C': 0.0}
+
+    def compute_P_and_C(z_vec):
+        """Calcule la matrice P et le facteur de normalisation C."""
+        z = np.exp(z_vec)
+        s = np.zeros((n, n))
+        for i in range(n):
+            s[i, :] = np.dot(masks[i], z)
+        
+        zi = z[:, np.newaxis]
+        zj = z[np.newaxis, :]
+        denom = (zi + s) * (zi + zj + s)
+        
+        P_raw = np.divide(zi * zj, denom, out=np.zeros_like(s), where=denom!=0)
+        np.fill_diagonal(P_raw, 0)
+        
+        # Calcul de C pour que Sum(P) == Sum(Degrees)
+        current_sum = np.sum(P_raw)
+        C = target_sum / current_sum if current_sum > 0 else 1.0
+        return P_raw * C, C
+
+    def objective(z_vec):
+        """Fonction cible : on minimise la MSE sur les degrés."""
+        P, C = compute_P_and_C(z_vec)
+        iteration_data['last_C'] = C # Stockage pour le callback
+        pred_degrees = np.sum(P, axis=1)
+        # MSE est plus stable pour le gradient que la MAE
+        return np.mean((pred_degrees - degrees)**2)
+
+    def callback(z_vec):
+        """Affiche les stats toutes les 10 itérations."""
+        iteration_data['count'] += 1
+        if iteration_data['count'] % 10 == 0:
+            P, C = compute_P_and_C(z_vec)
+            pred_degrees = np.sum(P, axis=1)
+            mae = np.mean(np.abs(pred_degrees - degrees))
+            print(f"Iteration {iteration_data['count']}: MAE = {mae:.6f}, C = {C:.4e}")
+
+    # Initialisation : log des degrés (pour garantir z > 0)
+    # On clip pour éviter log(0)
+    x0 = np.log(np.clip(degrees, 1e-1, None))
+
+    if speak:
+        print(f"Lancement de l'optimisation L-BFGS-B pour {n} noeuds...")
+
+    res = minimize(
+        objective, 
+        x0=x0, 
+        method='L-BFGS-B',
+        callback=callback,
+        options={'maxiter': 200, 'ftol': 1e-7}
+    )
+
+    # Reconstruction finale
+    final_P, final_C = compute_P_and_C(res.x)
+    final_z = np.exp(res.x)
+    final_mae = np.mean(np.abs(np.sum(final_P, axis=1) - degrees))
+
+    print(f"\n--- Modèle de Radiation Optimisé ---")
+    print(f"MAE finale : {final_mae:.6f}")
+    print(f"Facteur de normalisation global C : {final_C:.4e}")
+
+    check_val = np.sum(final_P) / target_sum
+    print(f"Vérification : Null Model radiation donne P.sum / 2*nb_edges = {check_val:.4f}")
+    if speak :
+        gravity_inference_health_check(adj, final_P, dist_matrix)
+   
+    return final_P, nodes
+
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
     'infomap': _appendInfomapCommunities,
@@ -1078,7 +1169,7 @@ COMMUNITY_MAPPING = {
     "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
     "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
-    'spatial_louvain_manualreg': _appendSpatialLouvainCommunities_ManualRegr
+    "spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation
 }
 
 

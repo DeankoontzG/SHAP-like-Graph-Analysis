@@ -1,0 +1,4 @@
+[core]
+    remote = storage_mac
+['remote "storage_mac"']
+    url = ssh://bgdu69@100.71.60.81//Users/bgdu69/Documents/Hackermann/00_StageM2/dvc_storage
