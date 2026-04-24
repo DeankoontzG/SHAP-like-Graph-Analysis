@@ -205,12 +205,12 @@ def generate_graph_from_probs(P, sbm_groups=None, positions=None):
         
     return g
 
-def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False):
+def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False, nb_iter = ""):
     results_list = []
     all_P_matrices = {}
 
     for alpha in Hybrid_ratios_list:
-        G_name = f"{name}_{f'{alpha:.2f}'.replace('.', '_')}_pos_{f'{1-alpha:.2f}'.replace('.', '_')}.graphml"
+        G_name = f"{name}_{f'{alpha:.2f}'.replace('.', '_')}_pos_{f'{1-alpha:.2f}'.replace('.', '_')}{nb_iter}.graphml"
 
         print("\n" + "="*90)
         print(f"Pour ratio_sbm = {alpha}")

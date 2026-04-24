@@ -326,6 +326,10 @@ def compute_commus(G, G_name):
     else:
         print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
         GT = None
+
+    if GT is not None and 'GT_pos' in GT:
+            for i, node_id in enumerate(G.nodes()):
+                G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
     
     G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
     G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
@@ -350,19 +354,23 @@ def analyze_commus(G_name_short, nb_iterations, name_export_results="DATE"):
     features_GT_pos = ['GT_pos_dist', 'GT_spatial_deg_product', 
                     #'GT_spatial_gravity_log', 'GT_degrees_spatial_u','GT_degrees_spatial_v'
                     ]
-    features_commu_inferee_normal = ["leiden_density", "louvain_density"]
-    features_commu_inferee_spatial_based_manual = ["spatial_leiden_density", "spatial_louvain_density"]
-    features_commu_inferee_spatial_based_scgravity = ["spatial_leiden_scgravity_density", "spatial_louvain_scgravity_density"]
-    features_commu_inferee_spatial_based_wrdb = ["spatial_leiden_wrdb_density", "spatial_louvain_wrdb_density"]
+    features_commu_inferee_normal = ["louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_reg = ["spatial_louvain_manualreg_density"]
+    features_commu_inferee_spatial_based_scgravity = ["spatial_louvain_scgravity_density"]
+    features_commu_inferee_spatial_based_wrdb = ["spatial_louvain_wrdb_density"]
 
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
-        "Inferred_Commu_spatial_manuel": features_commu_inferee_spatial_based_manual,
+        "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
         "Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         "Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
         "GT_proba": features_GT_proba,
+        "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
-        "GT_pos + Inferred_Commu spatial manuel": features_GT_pos + features_commu_inferee_spatial_based_manual,
+        "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
         "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
         "GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
     }
@@ -371,7 +379,7 @@ def analyze_commus(G_name_short, nb_iterations, name_export_results="DATE"):
 
     tasks = [
         (nb_iter, i) 
-        for nb_iter in range(nb_iterations) 
+        for nb_iter in range(1, nb_iterations + 1) 
         for i in np.linspace(1.0, 0.0, 11)
     ]
 

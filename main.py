@@ -63,54 +63,55 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
+    """
     execution_stats = []
-    for sbm_ratio in np.arange(0.00, 1.10, 0.10):
-        
-        G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_1".replace('.', '_')
-        G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}".replace('.', '_')
-        print("######################################")
-        print(f"#### graph {G_name} :  ####")
-        print("######################################")
-        
-        path = f"graph_library/{G_name}.graphml"
-        
-        try:
-            G = load_graphml_safe(path)
-            print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-        except Exception as e:
-            print(f"Erreur lors du chargement de {path} : {e}")
-        
-        start_time = time.time()
-        gp.compute_commus(G, G_name_bis)                
-        end_time = time.time()
-        duration = end_time - start_time
-
-        execution_stats.append({
-                "Graph": G_name,
-                "Nodes": G.number_of_nodes(),
-                "Edges": G.number_of_edges(),
-                "Time_sec": round(duration, 2),
-                "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
-                "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
-            })
+    for nbiter in range(1,31) : 
+        for sbm_ratio in np.arange(0.00, 1.10, 0.10):
             
-        print(f"⏱️ Terminé en {duration:.2f} secondes.")
-
+            G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            print("######################################")
+            print(f"#### graph {G_name} :  ####")
+            print("######################################")
+            
+            path = f"graph_library/{G_name}.graphml"
+            
+            try:
+                G = load_graphml_safe(path)
+                print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+            except Exception as e:
+                print(f"Erreur lors du chargement de {path} : {e}")
+            
+            start_time = time.time()
+            gp.compute_commus(G, G_name)                
+            end_time = time.time()
+            duration = end_time - start_time
+    
+            execution_stats.append({
+                    "Graph": G_name,
+                    "Nodes": G.number_of_nodes(),
+                    "Edges": G.number_of_edges(),
+                    "Time_sec": round(duration, 2),
+                    "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
+                    "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
+                })
+                
+            print(f"⏱️ Terminé en {duration:.2f} secondes.")
 
     df = pd.DataFrame(execution_stats)
     print("\n" + "="*50)
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
+    """
 
-    all_results = analyze_commus(G_name_short = "artificial_graph_sbmv4", nb_iterations=1, name_export_results="Test"):
-
-
-    df_bis = pd.DataFrame(execution_stats)
+    start_time = time.time()
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv4", nb_iterations=30, name_export_results="Test")
+    end_time = time.time()
+    duration = end_time - start_time
     print("\n" + "="*50)
-    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
     print("="*50)
-    print(df.to_string(index=False))
+    print(f"{duration} secs")
     
 
     """

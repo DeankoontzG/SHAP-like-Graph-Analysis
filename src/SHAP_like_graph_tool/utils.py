@@ -50,11 +50,11 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
-"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity",
-"spatial_leiden_wrdb","spatial_louvain_wrdb"]
-METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
+EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
+COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
+    #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
+'louvain', "spatial_louvain_manualreg", "spatial_louvain", "spatial_louvain_scgravity","spatial_louvain_wrdb"]
+METRICS_NODE = [] #[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -478,7 +478,7 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
     return G_train
 
 def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "Manual_Iterative"):
-    if NullModel_method == "Manual" : 
+    if NullModel_method == "ManualReg" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "Manual_Iterative":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
@@ -534,6 +534,9 @@ def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
 
 def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_wrdb_id" , NullModel_method = "WithReelDegreesBiais")
+
+def _appendSpatialLouvainCommunities_ManualRegr(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualreg_id" , NullModel_method = "ManualReg")
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -864,7 +867,7 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
     A_sum = len(G.edges())
     normalization_factor = 2*A_sum / P.sum()
     print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
-    print(f"Alpha moyen = {np.mean(alphas):.4f}, beta = {beta_final:.6f}")
+    print(f"Alpha moyen = {np.mean(alphas):.4f}, beta = {beta:.6f}")
     
     return P, nodes
 
@@ -1074,7 +1077,8 @@ COMMUNITY_MAPPING = {
     "spatial_leiden_scgravity" : _appendSpatialLeidenCommunities_scgravity,
     "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
-    "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais
+    "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
+    'spatial_louvain_manualreg': _appendSpatialLouvainCommunities_ManualRegr
 }
 
 
