@@ -26,6 +26,13 @@ Thumbs.db
 .vscode/
 .idea/
 
+_pycache__/
+*.pyc
+.ipynb_checkpoints/
+*.png
+*.csv
+outputs/results/
+
 # --- Autres ---
 myoutfile
 /graph_library
