@@ -333,12 +333,15 @@ def compute_commus(G, G_name):
     
     G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
     G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
-    #loadsave_data_joblib(data=G_kept, filename=f"G_train_init_{G_name}", mode="save")
 
-    G_train = computeDistanceFeatures(G_train)
+    #G_train = computeDistanceFeatures(G_train)
     G_train_with_communities = computeCommunityFeatures(G_train)
-    G_kept = computeDistanceFeatures(G_kept)
+    #G_kept = computeDistanceFeatures(G_kept)
     G_kept_with_communities = computeCommunityFeatures(G_kept)
+
+    print("Save : graph pour exploration commus")
+    loadsave_data_joblib(data=G_kept_with_communities, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
+    
     
     dataset_train = prepare_balanced_data(G_test, G_train_with_communities,  negative_ratio=10.0, GroundTruth=GT)
     dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_communities, negative_ratio=50.0, GroundTruth=GT)
@@ -351,9 +354,10 @@ def compute_commus(G, G_name):
     save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
 
-def analyze_commus(G_name_short, nb_iterations, name_export_results="DATE"):
+def analyze_commus(G_name_short, nb_iterations, i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
     features_GT_proba = ['GT_proba']
-    features_GT_pos = ['GT_pos_dist', 'GT_spatial_deg_product', 
+    features_GT_pos = ['GT_pos_dist', 
+                       #'GT_spatial_deg_product', 
                     #'GT_spatial_gravity_log', 'GT_degrees_spatial_u','GT_degrees_spatial_v'
                     ]
     features_commu_inferee_normal = ["louvain_density"]
@@ -370,18 +374,18 @@ def analyze_commus(G_name_short, nb_iterations, name_export_results="DATE"):
         "Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         "Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
         "GT_proba": features_GT_proba,
-        #"GT_pos": features_GT_pos,
-        #"GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
-        #"GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
-        #"GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
-        #"GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
-        #"GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
-        "Deepwalk" : features_deepwalk,
-        "Deepwalk + Inferred_Commu normal": features_deepwalk + features_commu_inferee_normal,
-        "Deepwalk + Inferred_Commu spatial manuel iter": features_deepwalk + features_commu_inferee_spatial_based_manual_iter,
-        "Deepwalk + Inferred_Commu spatial manuel reg": features_deepwalk + features_commu_inferee_spatial_based_manual_reg,
-        "Deepwalk + Inferred_Commu spatial scgravity": features_deepwalk + features_commu_inferee_spatial_based_scgravity,
-        "Deepwalk + Inferred_Commu spatial wrdb": features_deepwalk + features_commu_inferee_spatial_based_wrdb,
+        "GT_pos": features_GT_pos,
+        "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
+        "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
+        "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
+        "GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
+        #"Deepwalk" : features_deepwalk,
+        #"Deepwalk + Inferred_Commu normal": features_deepwalk + features_commu_inferee_normal,
+        #"Deepwalk + Inferred_Commu spatial manuel iter": features_deepwalk + features_commu_inferee_spatial_based_manual_iter,
+        #"Deepwalk + Inferred_Commu spatial manuel reg": features_deepwalk + features_commu_inferee_spatial_based_manual_reg,
+        #"Deepwalk + Inferred_Commu spatial scgravity": features_deepwalk + features_commu_inferee_spatial_based_scgravity,
+        #"Deepwalk + Inferred_Commu spatial wrdb": features_deepwalk + features_commu_inferee_spatial_based_wrdb,
     }
 
     all_results = []
@@ -389,7 +393,7 @@ def analyze_commus(G_name_short, nb_iterations, name_export_results="DATE"):
     tasks = [
         (nb_iter, i) 
         for nb_iter in range(1, nb_iterations + 1) 
-        for i in np.linspace(1.0, 0.0, 11)
+        for i in np.linspace(i_max, i_min, nb_i)
     ]
 
     cores_to_use = max(1, os.cpu_count() -2)
@@ -420,7 +424,7 @@ def run_single_experiment(nb_iter, i, G_name_short, experiments):
         """
         sbm_val = f"{i:.2f}"
         pos_val = f"{1-i:.2f}"
-        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}_deepwalk"
+        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}"
     
         # 1. Chargement des données d'entraînement
         _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)

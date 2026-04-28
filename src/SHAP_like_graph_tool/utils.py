@@ -50,7 +50,7 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ["deepwalk"] #['n2v_homophily', 'deepwalk', 'crosswalk']
+EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
 'louvain', "spatial_louvain", "spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
@@ -1183,7 +1183,7 @@ def computeCommunityFeatures(G_train, algos="All"):
         if algo in COMMUNITY_MAPPING:
             print(f"Calcul des communautés via {algo}...")
             if algo.startswith("spatial_"):
-                COMMUNITY_MAPPING[algo](G_train, pos_attr="deepwalk")
+                COMMUNITY_MAPPING[algo](G_train, pos_attr="GT_pos")
             else :
                 COMMUNITY_MAPPING[algo](G_train)
                 
