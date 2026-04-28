@@ -50,11 +50,12 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
+EMBEDDINGS = ["deepwalk"] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain_manualreg", "spatial_louvain", "spatial_louvain_scgravity","spatial_louvain_wrdb",
-"spatial_louvain_radiation"]
+'louvain', "spatial_louvain", "spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
+#"spatial_louvain_radiation"
+]
 METRICS_NODE = [] #[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
@@ -538,7 +539,7 @@ def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
 def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_wrdb_id" , NullModel_method = "WithReelDegreesBiais")
 
-def _appendSpatialLouvainCommunities_ManualRegr(G_train, pos_attr="GT_pos"):
+def _appendSpatialLouvainCommunities_ManualReg(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualreg_id" , NullModel_method = "ManualReg")
 
 def _appendSpatialLouvainCommunities_radiation(G_train, pos_attr="GT_pos"):
@@ -1169,7 +1170,8 @@ COMMUNITY_MAPPING = {
     "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
     "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
-    "spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation
+    #"spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation,
+    "spatial_louvain_manualreg" : _appendSpatialLouvainCommunities_ManualReg
 }
 
 
@@ -1180,7 +1182,11 @@ def computeCommunityFeatures(G_train, algos="All"):
     for algo in to_run:
         if algo in COMMUNITY_MAPPING:
             print(f"Calcul des communautés via {algo}...")
-            COMMUNITY_MAPPING[algo](G_train)
+            if algo.startswith("spatial_"):
+                COMMUNITY_MAPPING[algo](G_train, pos_attr="deepwalk")
+            else :
+                COMMUNITY_MAPPING[algo](G_train)
+                
         else:
             print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
             
