@@ -481,17 +481,19 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "Manual_Iterative"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "ManualIter"):
     if NullModel_method == "ManualReg" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
-    elif NullModel_method == "Manual_Iterative":
+    elif NullModel_method == "ManualIter":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
-    else : 
+    elif NullModel_method == "scgravity": 
         P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
     P_symetric = (P + P.T) / 2
+
+    #G_train.graph[f'P_Null_model_{NullModel_method}'] = P_symetric
 
     asymmetry_sum = np.sum(np.abs(P - P_symetric))
     max_diff = np.max(np.abs(P - P_symetric))
@@ -944,7 +946,7 @@ def gravity_inference_health_check(adjacency_mtx, P_mtx, dist_mtx):
         plt.tight_layout()
         plt.show()
 
-def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak = False):
+def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_iter=1000, speak = False):
     nodes = list(G.nodes())
     n = len(nodes)
     adj = nx.to_numpy_array(G)
@@ -1074,7 +1076,7 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     return current_P, nodes
 
 
-def get_radiation_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak=False):
+def get_radiation_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=1000, speak=False):
     nodes = list(G.nodes())
     n = len(nodes)
     adj = nx.to_numpy_array(G)
@@ -1175,7 +1177,7 @@ COMMUNITY_MAPPING = {
 }
 
 
-def computeCommunityFeatures(G_train, algos="All"):
+def computeCommunityFeatures(G_train, algos="All", spatial_ref = "GT_pos"):
     print("\n--- Enrichissement du Graphe avec les Communautés ---")
     to_run = COMMUNITY_ALGOS if algos == "All" else algos
     
@@ -1183,7 +1185,7 @@ def computeCommunityFeatures(G_train, algos="All"):
         if algo in COMMUNITY_MAPPING:
             print(f"Calcul des communautés via {algo}...")
             if algo.startswith("spatial_"):
-                COMMUNITY_MAPPING[algo](G_train, pos_attr="GT_pos")
+                COMMUNITY_MAPPING[algo](G_train, pos_attr= spatial_ref)
             else :
                 COMMUNITY_MAPPING[algo](G_train)
                 

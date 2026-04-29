@@ -65,8 +65,8 @@ if __name__ == "__main__":
 
     """
     execution_stats = []
-    for nbiter in range(2,31) : 
-        for sbm_ratio in np.arange(0.40, 0.62, 0.02):
+    for nbiter in range(1,31) : 
+        for sbm_ratio in np.arange(0.00, 1.10, 0.10):
             
             G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
             print("######################################")
@@ -82,7 +82,7 @@ if __name__ == "__main__":
                 print(f"Erreur lors du chargement de {path} : {e}")
             
             start_time = time.time()
-            gp.compute_commus(G, G_name)            
+            gp.compute_commus(G, G_name, "GT_pos")            
             end_time = time.time()
             duration = end_time - start_time
     
@@ -102,16 +102,17 @@ if __name__ == "__main__":
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
-    """
 
+    """
     start_time = time.time()
-    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv4", nb_iterations=30, i_min = 0.40, i_max = 0.60, nb_i=11, name_export_results="Test")
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv4", nb_iterations=10, i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="deepwalk")
     end_time = time.time()
     duration = end_time - start_time
     print("\n" + "="*50)
     print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
     print("="*50)
     print(f"{duration} secs")
+
     
 
     """
