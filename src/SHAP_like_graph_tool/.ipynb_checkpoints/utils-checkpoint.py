@@ -50,7 +50,7 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
+EMBEDDINGS = ['deepwalk'] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
 'louvain', "spatial_louvain", "spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
@@ -493,7 +493,7 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
     A = nx.to_numpy_array(G_train)
     P_symetric = (P + P.T) / 2
 
-    #G_train.graph[f'P_Null_model_{NullModel_method}'] = P_symetric
+    G_train.graph[f'P_Null_model_{NullModel_method}'] = P_symetric
 
     asymmetry_sum = np.sum(np.abs(P - P_symetric))
     max_diff = np.max(np.abs(P - P_symetric))

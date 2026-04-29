@@ -356,7 +356,7 @@ def compute_commus(G, G_name, spatial_ref = "GT_pos"):
     save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
 
-def analyze_commus(G_name_short, nb_iterations, i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
+def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
     features_GT_proba = ['GT_proba']
     features_GT_pos = ['GT_pos_dist', 
                        #'GT_spatial_deg_product', 
@@ -404,7 +404,7 @@ def analyze_commus(G_name_short, nb_iterations, i_min =0.00, i_max = 1.00, nb_i=
 
     # Exécution parallèle
     results_nested = Parallel(n_jobs=cores_to_use)(
-        delayed(run_single_experiment)(nb_iter, i, G_name_short, experiments) 
+        delayed(run_single_experiment)(nb_iter, i, spatial_ref, G_name_short, experiments) 
         for nb_iter, i in tasks
     )
 
@@ -420,14 +420,18 @@ def analyze_commus(G_name_short, nb_iterations, i_min =0.00, i_max = 1.00, nb_i=
     print(f" Succès ! Fichier sauvegardé dans : {output_path}")
     return all_results
 
-def run_single_experiment(nb_iter, i, G_name_short, experiments):
+def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
         """
         Fonction exécutée par un cœur unique pour une valeur de i et une itération donnée.
         """
         sbm_val = f"{i:.2f}"
         pos_val = f"{1-i:.2f}"
-        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}"
-    
+        if spatial_ref == "GT_Pos" : 
+            spatial_ref = ""
+        else :
+            spatial_ref = f"_{spatial_ref}"
+        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+
         # 1. Chargement des données d'entraînement
         _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)
         local_results = []

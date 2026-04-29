@@ -36,4 +36,5 @@ outputs/results/
 # --- Autres ---
 myoutfile
 /graph_library
-/outputs
+/outputs/results
+
