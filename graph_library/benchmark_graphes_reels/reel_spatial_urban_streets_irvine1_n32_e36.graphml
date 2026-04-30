@@ -1,0 +1,171 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="_pos" for="node" attr.name="_pos" attr.type="string" />
+  <key id="pos" for="node" attr.name="pos" attr.type="string" />
+  <graph edgedefault="undirected">
+    <node id="0">
+      <data key="pos">[-1.54, 1470.96]</data>
+      <data key="_pos">[1.7122033324227093, 4.209311144113742]</data>
+    </node>
+    <node id="1">
+      <data key="pos">[1.37, 1064.08]</data>
+      <data key="_pos">[1.6582791217069501, 4.545436223632705]</data>
+    </node>
+    <node id="2">
+      <data key="pos">[1.37, 160.23]</data>
+      <data key="_pos">[1.9744126663055712, 4.780446681925312]</data>
+    </node>
+    <node id="3">
+      <data key="pos">[1239.44, 6.19]</data>
+      <data key="_pos">[1.8428596502147605, 5.115447038254721]</data>
+    </node>
+    <node id="4">
+      <data key="pos">[1277.22, 1558.15]</data>
+      <data key="_pos">[1.095556596992059, 4.435782144288564]</data>
+    </node>
+    <node id="5">
+      <data key="pos">[1288.85, 3.29]</data>
+      <data key="_pos">[1.295570793598906, 4.98640545775531]</data>
+    </node>
+    <node id="6">
+      <data key="pos">[129.24, 3.29]</data>
+      <data key="_pos">[1.9450957861519789, 4.643583711490341]</data>
+    </node>
+    <node id="7">
+      <data key="pos">[1512.63, 1558.15]</data>
+      <data key="_pos">[0.9412320376584924, 4.579137704405483]</data>
+    </node>
+    <node id="8">
+      <data key="pos">[1556.23, 1459.33]</data>
+      <data key="_pos">[0.9595792551468822, 4.715312103388228]</data>
+    </node>
+    <node id="9">
+      <data key="pos">[1559.13, 398.54]</data>
+      <data key="_pos">[1.393727304034846, 5.059483682026576]</data>
+    </node>
+    <node id="10">
+      <data key="pos">[457.65, 6.19]</data>
+      <data key="_pos">[1.761190233040792, 4.847040502433884]</data>
+    </node>
+    <node id="11">
+      <data key="pos">[469.28, 1558.15]</data>
+      <data key="_pos">[1.4597415509412426, 4.3019103241895005]</data>
+    </node>
+    <node id="12">
+      <data key="pos">[59.49, 1558.15]</data>
+      <data key="_pos">[1.5912031167184502, 4.133452299077593]</data>
+    </node>
+    <node id="13">
+      <data key="pos">[693.06, 593.26]</data>
+      <data key="_pos">[1.6653861986180085, 5.265012581618788]</data>
+    </node>
+    <node id="14">
+      <data key="pos">[858.72, 479.92]</data>
+      <data key="_pos">[1.529920439361766, 5.263469556770713]</data>
+    </node>
+    <node id="15">
+      <data key="pos">[969.16, 1561.05]</data>
+      <data key="_pos">[1.258841168005134, 4.300533822402287]</data>
+    </node>
+    <node id="16">
+      <data key="pos">[1283.04, 1058.27]</data>
+      <data key="_pos">[1.2766486103609866, 4.65719546653153]</data>
+    </node>
+    <node id="17">
+      <data key="pos">[1283.04, 1462.24]</data>
+      <data key="_pos">[1.1882889388707418, 4.529564253167645]</data>
+    </node>
+    <node id="18">
+      <data key="pos">[1283.04, 744.39]</data>
+      <data key="_pos">[1.3229257189007178, 4.778942470880832]</data>
+    </node>
+    <node id="19">
+      <data key="pos">[1288.85, 346.23]</data>
+      <data key="_pos">[1.416627789918999, 4.93561665267991]</data>
+    </node>
+    <node id="20">
+      <data key="pos">[1512.63, 1055.36]</data>
+      <data key="_pos">[1.1855300688600794, 4.7196837188336]</data>
+    </node>
+    <node id="21">
+      <data key="pos">[1512.63, 1456.43]</data>
+      <data key="_pos">[1.0650415007282068, 4.632254919518757]</data>
+    </node>
+    <node id="22">
+      <data key="pos">[248.4, 73.04]</data>
+      <data key="_pos">[1.8506379752280988, 4.733813110886532]</data>
+    </node>
+    <node id="23">
+      <data key="pos">[460.56, 171.85]</data>
+      <data key="_pos">[1.6751711697114144, 4.777274761560046]</data>
+    </node>
+    <node id="24">
+      <data key="pos">[469.28, 1061.17]</data>
+      <data key="_pos">[1.5581200175120602, 4.606575330994244]</data>
+    </node>
+    <node id="25">
+      <data key="pos">[472.18, 1468.05]</data>
+      <data key="_pos">[1.4947780825683266, 4.41313958191131]</data>
+    </node>
+    <node id="26">
+      <data key="pos">[56.59, 1470.96]</data>
+      <data key="_pos">[1.5962481088175842, 4.264820270607675]</data>
+    </node>
+    <node id="27">
+      <data key="pos">[742.47, 465.39]</data>
+      <data key="_pos">[1.5982646825928983, 5.152813431947447]</data>
+    </node>
+    <node id="28">
+      <data key="pos">[762.81, 244.51]</data>
+      <data key="_pos">[1.6025895500954621, 4.971179068548438]</data>
+    </node>
+    <node id="29">
+      <data key="pos">[812.22, 9.1]</data>
+      <data key="_pos">[1.734691697928954, 5.049052618980088]</data>
+    </node>
+    <node id="30">
+      <data key="pos">[896.5, 1058.27]</data>
+      <data key="_pos">[1.409113070925099, 4.672541771633759]</data>
+    </node>
+    <node id="31">
+      <data key="pos">[972.06, 1465.15]</data>
+      <data key="_pos">[1.3173680775084067, 4.417937750365007]</data>
+    </node>
+    <edge source="0" target="26" />
+    <edge source="1" target="24" />
+    <edge source="2" target="22" />
+    <edge source="3" target="29" />
+    <edge source="4" target="17" />
+    <edge source="5" target="19" />
+    <edge source="6" target="22" />
+    <edge source="7" target="21" />
+    <edge source="8" target="21" />
+    <edge source="9" target="19" />
+    <edge source="10" target="23" />
+    <edge source="11" target="25" />
+    <edge source="12" target="26" />
+    <edge source="13" target="27" />
+    <edge source="14" target="27" />
+    <edge source="15" target="31" />
+    <edge source="16" target="17" />
+    <edge source="16" target="30" />
+    <edge source="16" target="18" />
+    <edge source="16" target="20" />
+    <edge source="17" target="21" />
+    <edge source="17" target="31" />
+    <edge source="18" target="20" />
+    <edge source="18" target="19" />
+    <edge source="18" target="30" />
+    <edge source="19" target="28" />
+    <edge source="20" target="21" />
+    <edge source="22" target="23" />
+    <edge source="23" target="28" />
+    <edge source="23" target="24" />
+    <edge source="24" target="25" />
+    <edge source="24" target="30" />
+    <edge source="25" target="26" />
+    <edge source="25" target="31" />
+    <edge source="27" target="28" />
+    <edge source="28" target="29" />
+  </graph>
+</graphml>
