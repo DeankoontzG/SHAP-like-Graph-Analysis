@@ -236,8 +236,11 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
         
     if GroundTruth is not None:
         print(f"Injection de la Ground Truth ({len(GroundTruth)} sources)...")
-        indices_u = df['u'].values.astype(int)
-        indices_v = df['v'].values.astype(int)
+        node_list = list(G.nodes()) # L'ordre utilisé lors de la création de GT_pos
+        mapping = {node_id: i for i, node_id in enumerate(node_list)}
+        
+        indices_u = df['u'].map(mapping).values.astype(int)
+        indices_v = df['v'].map(mapping).values.astype(int)
         
         for feat_name, data in GroundTruth.items():
             # Cas spécifiques (nominatifs) 

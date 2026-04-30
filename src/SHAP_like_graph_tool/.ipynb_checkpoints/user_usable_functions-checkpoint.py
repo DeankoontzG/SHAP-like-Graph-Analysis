@@ -377,16 +377,16 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
-        "Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
-        "Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
-        "Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
-        "GT_proba": features_GT_proba,
+        #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
+        #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
+        #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
+        #"GT_proba": features_GT_proba,
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
-        "GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
-        "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
-        "GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
+        #"GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
+       # "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
+        #"GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
         #"Deepwalk" : features_deepwalk,
         #"Deepwalk + Inferred_Commu normal": features_deepwalk + features_commu_inferee_normal,
         #"Deepwalk + Inferred_Commu spatial manuel iter": features_deepwalk + features_commu_inferee_spatial_based_manual_iter,
@@ -405,6 +405,10 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     ]
     """
 
+    """
+        
+    """
+    
     G_names_list = [
         "Airports",
         "urban_streets_savannah",
@@ -493,6 +497,7 @@ def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
             stats_eval_df = get_performance_metrics(model, X_eval_fixed, dataset_eval["target"], "EXP_")
             
             local_results.append({
+                "G_name" : G_name,
                 "Ratio_SBM": i,
                 "Iter": nb_iter,
                 "Experiment": exp_name,

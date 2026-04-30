@@ -169,74 +169,21 @@ if __name__ == "__main__":
     "urban_streets_richmond",
     "urban_streets_san-francisco",
 
+
+    fullerene_structures_C1500",
     "urban_streets_savannah",
     "urban_streets_seoul",
     "urban_streets_washington",
     "facebook_organizations_S1",
     "facebook_organizations_S2",
+    
+    
     """
     G_names_list = [
-        "facebook_organizations_S2",
         "Airports",
-        "fullerene_structures_C1500",
-        "urban_streets_savannah",
-        "urban_streets_seoul",
-        "urban_streets_washington",
-        "facebook_organizations_S1",
     ]
 
-    def fix_and_save_graph_metadata(path, path_target, pos_attr='_pos'):
-        import io, html, json
-        
-        # 1. Chargement brut
-        print(f"Graphe chargé : {path}")
-        with open(path, 'r', encoding='utf-8') as f:
-            raw = f.read()
-        G = nx.read_graphml(io.StringIO(html.unescape(raw)))
-        nodes = list(G.nodes())
-        clean_pos_list = []
-        
-        # 2. Extraction des positions uniquement
-        for n_id in nodes:
-            val = G.nodes[n_id].get(pos_attr) or G.nodes[n_id].get('pos')
-            if val is None:
-                raise ValueError(f"❌ Position absente pour {n_id}")
-                
-            if isinstance(val, str):
-                # On nettoie le format texte pour avoir une liste de floats
-                s = val.strip().replace('[', '').replace(']', '').replace(',', ' ')
-                val = [float(x) for x in s.split()]
-            
-            clean_pos_list.append([float(x) for x in val])
-    
-        # 3. MISE À JOUR CIBLÉE (On ne boucle pas sur tous les attributs)
-        G.graph['GroundTruth_JSON'] = json.dumps({'GT_pos': clean_pos_list})
-    
-        # 4. Sauvegarde
-        print(f"Graphe sauvegardé : {path}")
-        nx.write_graphml(G, path_target, named_key_ids=True)
-        
-        print(f"✅ MAJ ciblée terminée pour {path}. Les autres attributs n'ont pas été touchés.")
 
-        if 'GroundTruth_JSON' in G.graph:
-            print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
-            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-            
-            GT = {
-                'GT_pos': np.array(gt_raw['GT_pos']),
-                    }
-    
-            if 'P_matrix_JSON' in G.graph:
-                print("P_matrix trouvée.")
-                GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
-        else:
-            print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
-            GT = None
-    
-        return G
-
-
-    
     for G_name in G_names_list : 
         print("######################################")
         print(f"#### graph {G_name} :  ####")
@@ -245,21 +192,36 @@ if __name__ == "__main__":
         path = f"graph_library/benchmark_graphes_reels/reel_spatial_{G_name}"
         
         try:
-            G = load_graphml_safe(f"{path}", startswith = True)
+            G = load_graphml_safe(f"{path}.graphml", startswith = False)
             print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
         except Exception as e:
             print(f"Erreur lors du chargement de {path} : {e}")
 
         print(f"Validation 1er nœud : {list(G.nodes(data=True))[0]}")
 
-
+        
         for n, data in G.nodes(data=True):
-            for attr in ['_pos']:
+            for attr in ['GT_pos']:
                 if attr in data and isinstance(data[attr], str):
                     try:
                         data[attr] = np.array(ast.literal_eval(data[attr]))
                     except (ValueError, SyntaxError):
                         continue
+        
+        if 'GroundTruth_JSON' in G.graph:
+            print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
+            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
+            
+            GT = {
+                'GT_pos': np.array(gt_raw['GT_pos']),
+                 }
+        else:
+            print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
+            GT = None
+
+        if GT is not None and 'GT_pos' in GT:
+            for i, node_id in enumerate(G.nodes()):
+                G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
 
         first_node = next(iter(G.nodes))
         print(G.nodes[first_node])
@@ -270,7 +232,7 @@ if __name__ == "__main__":
         duration = end_time - start_time
     
 
-    gp.analyze_commus(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_04_30")
+    gp.analyze_commus(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_04_31")
         
     
     
