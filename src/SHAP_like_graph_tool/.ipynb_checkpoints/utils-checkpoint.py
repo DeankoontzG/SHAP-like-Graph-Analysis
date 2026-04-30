@@ -41,6 +41,7 @@ import json
 from xgboost import XGBClassifier
 import optuna
 import time
+import inspect
 
 
 
@@ -50,10 +51,11 @@ import time
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['deepwalk'] #['n2v_homophily', 'deepwalk', 'crosswalk']
+EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain", "spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
+'louvain', "spatial_louvain", 
+    #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
 METRICS_NODE = [] #[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
@@ -335,28 +337,76 @@ def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
     
     return len(robust_commus) >= K_min
 
-def _appendLouvainCommunities(G_train, K_min=3, min_edge_ratio=0.01):
-    res = 1.0
-    attempts = 0
+def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolutions=None, **kwargs):
+    """
+    Explore une liste de résolutions et retourne la partition maximisant le ratio de densité.
+    """
+    if resolutions is None:
+        resolutions = [0.5, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0]
+
+    # --- Filtrage des arguments ---
+    sig = inspect.signature(partition_func)
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
     
-    valid = False
-    partition_dict = {}
+    best_score = -1
+    best_partition = None
+    N = G.number_of_nodes()
 
-    while not valid and attempts < 12:
-        communities_list = nx.community.louvain_communities(G_train, seed=42, resolution=res)
+    for res in resolutions:
+        communities_list = partition_func(G, resolution=res, **filtered_kwargs)
         
-        node_to_community = {} 
+        # Formatage en partition_dict et groupement par nœuds
+        partition_dict = {} 
+        nodes_by_comm = {}
         for i, community in enumerate(communities_list):
-            for node in community:
-                node_to_community[node] = i
+            nodes_list = list(community)
+            nodes_by_comm[i] = nodes_list
+            for node in nodes_list:
+                partition_dict[node] = i
         
-        valid = is_partition_robust(G_train, node_to_community, K_min=K_min, min_edge_ratio=min_edge_ratio)
-        
-        if not valid:
-            res *= 1.2
-            attempts += 1
+        # Validation que la partition a suffisamment de commus intéressantes (3)
+        if not is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):
+            continue
 
-    nx.set_node_attributes(G_train, node_to_community, "louvain_id")
+        # Calcul du score de Ratio de Densité 
+        current_ratios = []
+        node_degrees = dict(G.degree())
+        
+        for c, nodes in nodes_by_comm.items():
+            n_s = len(nodes)
+            if n_s < 2: continue
+            
+            m_in = G.subgraph(nodes).number_of_edges()
+            vol_s = sum(node_degrees[n] for n in nodes)
+            m_out = vol_s - (2 * m_in) # Car les liens internes comptent pour 2 ds les degrés (2 noeuds)
+            
+            possible_in = n_s * (n_s - 1) / 2
+            possible_out = n_s * (N - n_s)
+            
+            rho_in = m_in / possible_in if possible_in > 0 else 0
+            rho_out = m_out / possible_out if possible_out > 0 else 0
+            
+            current_ratios.append(rho_in / rho_out if rho_out > 0 else rho_in * 100)
+
+        avg_ratio = sum(current_ratios) / len(current_ratios) if current_ratios else 0
+        
+        if avg_ratio > best_score:
+            best_score = avg_ratio
+            best_partition = partition_dict
+
+    final_partition = best_partition if best_partition else partition_dict
+
+    return final_partition
+
+def _appendLouvainCommunities(G_train, K_min=3, min_edge_ratio=0.01):
+    best_p = _find_best_partition(
+        G_train, 
+        nx.community.louvain_communities, 
+        K_min=K_min, 
+        min_edge_ratio=min_edge_ratio,
+    )
+    
+    nx.set_node_attributes(G_train, best_p, "louvain_id")
     _normalize_community_assignment(G_train, "louvain_id")
     
     return G_train
@@ -481,7 +531,7 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "ManualIter"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "ManualIter",  K_min=3, min_edge_ratio=0.01):
     if NullModel_method == "ManualReg" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "ManualIter":
@@ -509,16 +559,14 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         idx_v = mapping[v]
         return P_symetric[idx_u, idx_v]
 
-    # Appel de l'algorithme développé dans MetaLouvain.py
-    current_res = 1.0
-    partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
-    
-    attempts = 0
-    # Tant que la partition n'est pas robuste, on augmente la résolution
-    while not is_partition_robust(G_train, partition, K_min=3, min_edge_ratio=0.01) and attempts < 12:
-        current_res *= 1.2
-        partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
-        attempts += 1
+    # Appel de l'algorithme développé dans MetaLouvain.py, dans la loop qui cherche la best partition
+    partition = _find_best_partition(
+        G_train, 
+        nx.community.louvain_communities, 
+        K_min=K_min, 
+        min_edge_ratio=min_edge_ratio,
+        null_model=my_matrix_null_model
+    )
     
     print("--- Diagnostic de l'objet partition ---")
     print(f"Nombre de nœuds assignés : {len(partition)}")

@@ -312,14 +312,19 @@ def compute_commus(G, G_name, spatial_ref = "GT_pos"):
     if 'GroundTruth_JSON' in G.graph:
         print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
         gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-        
+        raw_pos = gt_raw.get('GT_pos', [])
+        gt_pos_array = np.array(raw_pos, dtype=float)
+
+        """
         GT = {'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
             'GT_pos': np.array(gt_raw['GT_pos']),
             'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
             'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']),
             'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial'])
                 }
-
+        """
+        GT = {'GT_pos': gt_pos_array}
+                
         if 'P_matrix_JSON' in G.graph:
             print("P_matrix trouvée.")
             GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
@@ -392,20 +397,39 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
 
     all_results = []
 
+    """
     tasks = [
         (nb_iter, i) 
         for nb_iter in range(1, nb_iterations + 1) 
         for i in np.linspace(i_max, i_min, nb_i)
     ]
+    """
+
+    G_names_list = [
+        "Airports",
+        "urban_streets_savannah",
+        "urban_streets_seoul",
+        "urban_streets_washington",
+        "facebook_organizations_S1",
+        "facebook_organizations_S2",
+        "fullerene_structures_C1500"
+    ]
+    tasks = [G_name for G_name in G_names_list]
 
     cores_to_use = max(1, os.cpu_count() -2)
 
     print(f"Lancement de la parallélisation sur {cores_to_use} coeurs pour {len(tasks)} tâches...")
 
     # Exécution parallèle
+    """
     results_nested = Parallel(n_jobs=cores_to_use)(
         delayed(run_single_experiment)(nb_iter, i, spatial_ref, G_name_short, experiments) 
         for nb_iter, i in tasks
+    )
+    """
+    results_nested = Parallel(n_jobs=cores_to_use)(
+        delayed(run_single_experiment)(0, 0, "_pos", G_name_short, experiments) 
+        for G_name_short in tasks
     )
 
     # Aplatir la liste de listes
@@ -430,7 +454,9 @@ def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
             spatial_ref = ""
         else :
             spatial_ref = f"_{spatial_ref}"
-        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+        #G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+        G_name = f"{G_name_short}"
+    
 
         # 1. Chargement des données d'entraînement
         _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)

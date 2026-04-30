@@ -1,775 +1,969 @@
 <?xml version='1.0' encoding='utf-8'?>
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="GT_pos" for="node" attr.name="GT_pos" attr.type="string" />
   <key id="_pos" for="node" attr.name="_pos" attr.type="string" />
   <key id="pos" for="node" attr.name="pos" attr.type="string" />
+  <key id="GroundTruth_JSON" for="graph" attr.name="GroundTruth_JSON" attr.type="string" />
   <graph edgedefault="undirected">
     <node id="0">
       <data key="pos">[-0.57, 1405.87]</data>
       <data key="_pos">[5.921459703478945, -8.117773167403891]</data>
+      <data key="GT_pos">[5.921459703478945, -8.117773167403891]</data>
     </node>
     <node id="1">
       <data key="pos">[-0.57, 275.62]</data>
       <data key="_pos">[5.637171186335095, -8.443029588883809]</data>
+      <data key="GT_pos">[5.637171186335095, -8.443029588883809]</data>
     </node>
     <node id="2">
       <data key="pos">[-0.57, 595.88]</data>
       <data key="_pos">[5.768854709641291, -8.39158669758842]</data>
+      <data key="GT_pos">[5.768854709641291, -8.39158669758842]</data>
     </node>
     <node id="3">
       <data key="pos">[-0.57, 784.0]</data>
       <data key="_pos">[5.800900886426795, -8.306072059048383]</data>
+      <data key="GT_pos">[5.800900886426795, -8.306072059048383]</data>
     </node>
     <node id="4">
       <data key="pos">[-0.57, 913.04]</data>
       <data key="_pos">[5.819477560861741, -8.266683505252239]</data>
+      <data key="GT_pos">[5.819477560861741, -8.266683505252239]</data>
     </node>
     <node id="5">
       <data key="pos">[0.98, 1040.52]</data>
       <data key="_pos">[5.846592911017057, -8.230715818569427]</data>
+      <data key="GT_pos">[5.846592911017057, -8.230715818569427]</data>
     </node>
     <node id="6">
       <data key="pos">[0.98, 1169.56]</data>
       <data key="_pos">[5.87617609626587, -8.194712400037124]</data>
+      <data key="GT_pos">[5.87617609626587, -8.194712400037124]</data>
     </node>
     <node id="7">
       <data key="pos">[0.98, 390.66]</data>
       <data key="_pos">[5.679449234968184, -8.414183292073877]</data>
+      <data key="GT_pos">[5.679449234968184, -8.414183292073877]</data>
     </node>
     <node id="8">
       <data key="pos">[0.98, 488.61]</data>
       <data key="_pos">[5.7211333429479225, -8.39464729884891]</data>
+      <data key="GT_pos">[5.7211333429479225, -8.39464729884891]</data>
     </node>
     <node id="9">
       <data key="pos">[0.98, 707.82]</data>
       <data key="_pos">[5.8011176581442125, -8.354371888397377]</data>
+      <data key="GT_pos">[5.8011176581442125, -8.354371888397377]</data>
     </node>
     <node id="10">
       <data key="pos">[1.76, 187.0]</data>
       <data key="_pos">[5.585466016455266, -8.444703630134729]</data>
+      <data key="GT_pos">[5.585466016455266, -8.444703630134729]</data>
     </node>
     <node id="11">
       <data key="pos">[1.76, 29.98]</data>
       <data key="_pos">[5.545758285985785, -8.419986698103841]</data>
+      <data key="GT_pos">[5.545758285985785, -8.419986698103841]</data>
     </node>
     <node id="12">
       <data key="pos">[1029.1, 1560.47]</data>
       <data key="_pos">[5.784346399794472, -7.864238904251308]</data>
+      <data key="GT_pos">[5.784346399794472, -7.864238904251308]</data>
     </node>
     <node id="13">
       <data key="pos">[1043.39, 0.44]</data>
       <data key="_pos">[5.355421689606658, -8.23083454948469]</data>
+      <data key="GT_pos">[5.355421689606658, -8.23083454948469]</data>
     </node>
     <node id="14">
       <data key="pos">[1109.68, 1563.69]</data>
       <data key="_pos">[5.76555231213618, -7.821260753724144]</data>
+      <data key="GT_pos">[5.76555231213618, -7.821260753724144]</data>
     </node>
     <node id="15">
       <data key="pos">[1212.84, 1560.47]</data>
       <data key="_pos">[5.74359322707159, -7.781005340960597]</data>
+      <data key="GT_pos">[5.74359322707159, -7.781005340960597]</data>
     </node>
     <node id="16">
       <data key="pos">[126.51, 1557.25]</data>
       <data key="_pos">[5.9256795270885085, -8.048886450959106]</data>
+      <data key="GT_pos">[5.9256795270885085, -8.048886450959106]</data>
     </node>
     <node id="17">
       <data key="pos">[1385.36, 1559.88]</data>
       <data key="_pos">[5.725063117465345, -7.739984978945946]</data>
+      <data key="GT_pos">[5.725063117465345, -7.739984978945946]</data>
     </node>
     <node id="18">
       <data key="pos">[1402.52, 0.44]</data>
       <data key="_pos">[5.258511387658494, -8.181844569364012]</data>
+      <data key="GT_pos">[5.258511387658494, -8.181844569364012]</data>
     </node>
     <node id="19">
       <data key="pos">[1476.37, 1559.78]</data>
       <data key="_pos">[5.710753952046866, -7.696988548097694]</data>
+      <data key="GT_pos">[5.710753952046866, -7.696988548097694]</data>
     </node>
     <node id="20">
       <data key="pos">[1552.55, 1121.36]</data>
       <data key="_pos">[5.5095469767413885, -7.808119154985278]</data>
+      <data key="GT_pos">[5.5095469767413885, -7.808119154985278]</data>
     </node>
     <node id="21">
       <data key="pos">[1552.55, 1209.98]</data>
       <data key="_pos">[5.611916022117172, -7.7451785711044705]</data>
+      <data key="GT_pos">[5.611916022117172, -7.7451785711044705]</data>
     </node>
     <node id="22">
       <data key="pos">[1552.55, 881.94]</data>
       <data key="_pos">[5.424751172537451, -7.857676059468924]</data>
+      <data key="GT_pos">[5.424751172537451, -7.857676059468924]</data>
     </node>
     <node id="23">
       <data key="pos">[1554.1, 1513.14]</data>
       <data key="_pos">[5.683099305188517, -7.689883827873126]</data>
+      <data key="GT_pos">[5.683099305188517, -7.689883827873126]</data>
     </node>
     <node id="24">
       <data key="pos">[1554.1, 989.21]</data>
       <data key="_pos">[5.465100180989704, -7.829202144338756]</data>
+      <data key="GT_pos">[5.465100180989704, -7.829202144338756]</data>
     </node>
     <node id="25">
       <data key="pos">[1555.66, 1360.78]</data>
       <data key="_pos">[5.6476920184800665, -7.716845320392097]</data>
+      <data key="GT_pos">[5.6476920184800665, -7.716845320392097]</data>
     </node>
     <node id="26">
       <data key="pos">[1555.66, 721.81]</data>
       <data key="_pos">[5.386810344873203, -7.893605390020089]</data>
+      <data key="GT_pos">[5.386810344873203, -7.893605390020089]</data>
     </node>
     <node id="27">
       <data key="pos">[1557.21, 326.92]</data>
       <data key="_pos">[5.2533172134143555, -8.034440084026738]</data>
+      <data key="GT_pos">[5.2533172134143555, -8.034440084026738]</data>
     </node>
     <node id="28">
       <data key="pos">[1557.21, 480.83]</data>
       <data key="_pos">[5.281490205327196, -7.9995516832763744]</data>
+      <data key="GT_pos">[5.281490205327196, -7.9995516832763744]</data>
     </node>
     <node id="29">
       <data key="pos">[1557.99, 28.42]</data>
       <data key="_pos">[5.277115634977044, -8.202613352949276]</data>
+      <data key="GT_pos">[5.277115634977044, -8.202613352949276]</data>
     </node>
     <node id="30">
       <data key="pos">[1558.77, 169.9]</data>
       <data key="_pos">[5.23079042454071, -8.118344085659439]</data>
+      <data key="GT_pos">[5.23079042454071, -8.118344085659439]</data>
     </node>
     <node id="31">
       <data key="pos">[1558.77, 236.75]</data>
       <data key="_pos">[5.219079277051352, -8.06995819297385]</data>
+      <data key="GT_pos">[5.219079277051352, -8.06995819297385]</data>
     </node>
     <node id="32">
       <data key="pos">[1558.77, 598.99]</data>
       <data key="_pos">[5.31389763480208, -7.965535785099044]</data>
+      <data key="GT_pos">[5.31389763480208, -7.965535785099044]</data>
     </node>
     <node id="33">
       <data key="pos">[300.58, 1560.47]</data>
       <data key="_pos">[5.880443835636596, -8.035256615530212]</data>
+      <data key="GT_pos">[5.880443835636596, -8.035256615530212]</data>
     </node>
     <node id="34">
       <data key="pos">[318.91, 1.99]</data>
       <data key="_pos">[5.48716525043671, -8.371823342991291]</data>
+      <data key="GT_pos">[5.48716525043671, -8.371823342991291]</data>
     </node>
     <node id="35">
       <data key="pos">[4.02, 1515.34]</data>
       <data key="_pos">[5.932494906268232, -8.075320741484465]</data>
+      <data key="GT_pos">[5.932494906268232, -8.075320741484465]</data>
     </node>
     <node id="36">
       <data key="pos">[481.1, 1563.69]</data>
       <data key="_pos">[5.846558975490903, -8.0043751997923]</data>
+      <data key="GT_pos">[5.846558975490903, -8.0043751997923]</data>
     </node>
     <node id="37">
       <data key="pos">[573.88, 1.99]</data>
       <data key="_pos">[5.4606193267264445, -8.316330432997038]</data>
+      <data key="GT_pos">[5.4606193267264445, -8.316330432997038]</data>
     </node>
     <node id="38">
       <data key="pos">[593.31, 1561.34]</data>
       <data key="_pos">[5.805947699059648, -7.9521272163516885]</data>
+      <data key="GT_pos">[5.805947699059648, -7.9521272163516885]</data>
     </node>
     <node id="39">
       <data key="pos">[60.84, 0.44]</data>
       <data key="_pos">[5.52194903170756, -8.409565693107066]</data>
+      <data key="GT_pos">[5.52194903170756, -8.409565693107066]</data>
     </node>
     <node id="40">
       <data key="pos">[700.3, 1560.47]</data>
       <data key="_pos">[5.81343539340473, -7.975744726230596]</data>
+      <data key="GT_pos">[5.81343539340473, -7.975744726230596]</data>
     </node>
     <node id="41">
       <data key="pos">[716.13, 1.99]</data>
       <data key="_pos">[5.407599921879675, -8.281033047633494]</data>
+      <data key="GT_pos">[5.407599921879675, -8.281033047633494]</data>
     </node>
     <node id="42">
       <data key="pos">[893.71, 1560.47]</data>
       <data key="_pos">[5.805282428013988, -7.908060054235598]</data>
+      <data key="GT_pos">[5.805282428013988, -7.908060054235598]</data>
     </node>
     <node id="43">
       <data key="pos">[910.47, 193.22]</data>
       <data key="_pos">[5.40745114049447, -8.215119017226746]</data>
+      <data key="GT_pos">[5.40745114049447, -8.215119017226746]</data>
     </node>
     <node id="44">
       <data key="pos">[0.8, 1305.81]</data>
       <data key="_pos">[5.862860426351704, -8.15355825956404]</data>
+      <data key="GT_pos">[5.862860426351704, -8.15355825956404]</data>
     </node>
     <node id="45">
       <data key="pos">[1029.34, 1515.34]</data>
       <data key="_pos">[5.757242357011605, -7.880473869358413]</data>
+      <data key="GT_pos">[5.757242357011605, -7.880473869358413]</data>
     </node>
     <node id="46">
       <data key="pos">[1030.15, 1367.63]</data>
       <data key="_pos">[5.721648907449568, -7.896039887308029]</data>
+      <data key="GT_pos">[5.721648907449568, -7.896039887308029]</data>
     </node>
     <node id="47">
       <data key="pos">[1030.18, 878.83]</data>
       <data key="_pos">[5.544104778134785, -8.011787709276152]</data>
+      <data key="GT_pos">[5.544104778134785, -8.011787709276152]</data>
     </node>
     <node id="48">
       <data key="pos">[1030.46, 1311.62]</data>
       <data key="_pos">[5.696885692197437, -7.920876451457382]</data>
+      <data key="GT_pos">[5.696885692197437, -7.920876451457382]</data>
     </node>
     <node id="49">
       <data key="pos">[1031.25, 1167.2]</data>
       <data key="_pos">[5.663627534762417, -7.943626579555822]</data>
+      <data key="GT_pos">[5.663627534762417, -7.943626579555822]</data>
     </node>
     <node id="50">
       <data key="pos">[1031.93, 1041.23]</data>
       <data key="_pos">[5.627958045280328, -7.967560125608002]</data>
+      <data key="GT_pos">[5.627958045280328, -7.967560125608002]</data>
     </node>
     <node id="51">
       <data key="pos">[1032.32, 970.57]</data>
       <data key="_pos">[5.584967000795056, -7.983444912734587]</data>
+      <data key="GT_pos">[5.584967000795056, -7.983444912734587]</data>
     </node>
     <node id="52">
       <data key="pos">[1033.29, 709.37]</data>
       <data key="_pos">[5.507653839214896, -8.043220729466778]</data>
+      <data key="GT_pos">[5.507653839214896, -8.043220729466778]</data>
     </node>
     <node id="53">
       <data key="pos">[1037.95, 476.17]</data>
       <data key="_pos">[5.4438268518315285, -8.108576818102383]</data>
+      <data key="GT_pos">[5.4438268518315285, -8.108576818102383]</data>
     </node>
     <node id="54">
       <data key="pos">[1037.95, 605.21]</data>
       <data key="_pos">[5.474075127596743, -8.075716357865799]</data>
+      <data key="GT_pos">[5.474075127596743, -8.075716357865799]</data>
     </node>
     <node id="55">
       <data key="pos">[1041.06, 351.8]</data>
       <data key="_pos">[5.41460832369679, -8.138478826614376]</data>
+      <data key="GT_pos">[5.41460832369679, -8.138478826614376]</data>
     </node>
     <node id="56">
       <data key="pos">[1042.62, 208.77]</data>
       <data key="_pos">[5.385524906709678, -8.161531558998082]</data>
+      <data key="GT_pos">[5.385524906709678, -8.161531558998082]</data>
     </node>
     <node id="57">
       <data key="pos">[1044.17, 31.53]</data>
       <data key="_pos">[5.378680659879973, -8.209167125180596]</data>
+      <data key="GT_pos">[5.378680659879973, -8.209167125180596]</data>
     </node>
     <node id="58">
       <data key="pos">[1110.52, 1515.34]</data>
       <data key="_pos">[5.739165267760649, -7.8387953748630945]</data>
+      <data key="GT_pos">[5.739165267760649, -7.8387953748630945]</data>
     </node>
     <node id="59">
       <data key="pos">[1116.52, 1167.2]</data>
       <data key="_pos">[5.641901638305074, -7.907096270287295]</data>
+      <data key="GT_pos">[5.641901638305074, -7.907096270287295]</data>
     </node>
     <node id="60">
       <data key="pos">[1118.69, 1041.48]</data>
       <data key="_pos">[5.608020615565041, -7.935478961960878]</data>
+      <data key="GT_pos">[5.608020615565041, -7.935478961960878]</data>
     </node>
     <node id="61">
       <data key="pos">[1118.79, 709.37]</data>
       <data key="_pos">[5.47676570438013, -8.011596563060953]</data>
+      <data key="GT_pos">[5.47676570438013, -8.011596563060953]</data>
     </node>
     <node id="62">
       <data key="pos">[1118.79, 880.39]</data>
       <data key="_pos">[5.519051202146737, -7.976088106513535]</data>
+      <data key="GT_pos">[5.519051202146737, -7.976088106513535]</data>
     </node>
     <node id="63">
       <data key="pos">[1119.19, 1321.76]</data>
       <data key="_pos">[5.682024727096232, -7.884272060358922]</data>
+      <data key="GT_pos">[5.682024727096232, -7.884272060358922]</data>
     </node>
     <node id="64">
       <data key="pos">[1119.35, 1002.8]</data>
       <data key="_pos">[5.561715774549539, -7.942534429377156]</data>
+      <data key="GT_pos">[5.561715774549539, -7.942534429377156]</data>
     </node>
     <node id="65">
       <data key="pos">[1119.35, 1363.84]</data>
       <data key="_pos">[5.707971067693051, -7.857657005011044]</data>
+      <data key="GT_pos">[5.707971067693051, -7.857657005011044]</data>
     </node>
     <node id="66">
       <data key="pos">[1123.46, 325.37]</data>
       <data key="_pos">[5.3795169086082275, -8.119634499602075]</data>
+      <data key="GT_pos">[5.3795169086082275, -8.119634499602075]</data>
     </node>
     <node id="67">
       <data key="pos">[1123.46, 606.76]</data>
       <data key="_pos">[5.44134123281561, -8.047141254512667]</data>
+      <data key="GT_pos">[5.44134123281561, -8.047141254512667]</data>
     </node>
     <node id="68">
       <data key="pos">[1125.01, 476.17]</data>
       <data key="_pos">[5.4095951477307205, -8.082872343157362]</data>
+      <data key="GT_pos">[5.4095951477307205, -8.082872343157362]</data>
     </node>
     <node id="69">
       <data key="pos">[1213.41, 1515.34]</data>
       <data key="_pos">[5.718693177498339, -7.799865194123981]</data>
+      <data key="GT_pos">[5.718693177498339, -7.799865194123981]</data>
     </node>
     <node id="70">
       <data key="pos">[1215.37, 1360.61]</data>
       <data key="_pos">[5.687408518058364, -7.821169386991508]</data>
+      <data key="GT_pos">[5.687408518058364, -7.821169386991508]</data>
     </node>
     <node id="71">
       <data key="pos">[1216.33, 1284.34]</data>
       <data key="_pos">[5.653704923681901, -7.846896183378868]</data>
+      <data key="GT_pos">[5.653704923681901, -7.846896183378868]</data>
     </node>
     <node id="72">
       <data key="pos">[1217.81, 1167.2]</data>
       <data key="_pos">[5.614063552368969, -7.872841801259335]</data>
+      <data key="GT_pos">[5.614063552368969, -7.872841801259335]</data>
     </node>
     <node id="73">
       <data key="pos">[1218.29, 881.94]</data>
       <data key="_pos">[5.497414078238131, -7.938302947220044]</data>
+      <data key="GT_pos">[5.497414078238131, -7.938302947220044]</data>
     </node>
     <node id="74">
       <data key="pos">[1219.28, 1051.16]</data>
       <data key="_pos">[5.567854583011483, -7.895792787596849]</data>
+      <data key="GT_pos">[5.567854583011483, -7.895792787596849]</data>
     </node>
     <node id="75">
       <data key="pos">[1219.85, 710.93]</data>
       <data key="_pos">[5.43710436555519, -7.988118442297863]</data>
+      <data key="GT_pos">[5.43710436555519, -7.988118442297863]</data>
     </node>
     <node id="76">
       <data key="pos">[1221.4, 608.32]</data>
       <data key="_pos">[5.406202469755998, -8.021403849381356]</data>
+      <data key="GT_pos">[5.406202469755998, -8.021403849381356]</data>
     </node>
     <node id="77">
       <data key="pos">[1221.4, 797.99]</data>
       <data key="_pos">[5.4607734789461535, -7.956121137867258]</data>
+      <data key="GT_pos">[5.4607734789461535, -7.956121137867258]</data>
     </node>
     <node id="78">
       <data key="pos">[1221.4, 989.21]</data>
       <data key="_pos">[5.532685333302513, -7.91433377283776]</data>
+      <data key="GT_pos">[5.532685333302513, -7.91433377283776]</data>
     </node>
     <node id="79">
       <data key="pos">[1222.96, 325.37]</data>
       <data key="_pos">[5.3512734860002995, -8.091911255984948]</data>
+      <data key="GT_pos">[5.3512734860002995, -8.091911255984948]</data>
     </node>
     <node id="80">
       <data key="pos">[1222.96, 477.73]</data>
       <data key="_pos">[5.376877874522962, -8.05663552637179]</data>
+      <data key="GT_pos">[5.376877874522962, -8.05663552637179]</data>
     </node>
     <node id="81">
       <data key="pos">[1226.84, 288.05]</data>
       <data key="_pos">[5.338518627810966, -8.127682704124684]</data>
+      <data key="GT_pos">[5.338518627810966, -8.127682704124684]</data>
     </node>
     <node id="82">
       <data key="pos">[1227.62, 31.53]</data>
       <data key="_pos">[5.335726326100834, -8.174893786823928]</data>
+      <data key="GT_pos">[5.335726326100834, -8.174893786823928]</data>
     </node>
     <node id="83">
       <data key="pos">[127.02, 1515.34]</data>
       <data key="_pos">[5.900138354409845, -8.069068236907802]</data>
+      <data key="GT_pos">[5.900138354409845, -8.069068236907802]</data>
     </node>
     <node id="84">
       <data key="pos">[128.35, 1405.89]</data>
       <data key="_pos">[5.892192360765904, -8.104761043943952]</data>
+      <data key="GT_pos">[5.892192360765904, -8.104761043943952]</data>
     </node>
     <node id="85">
       <data key="pos">[129.55, 1306.54]</data>
       <data key="_pos">[5.854002643023903, -8.121815262186523]</data>
+      <data key="GT_pos">[5.854002643023903, -8.121815262186523]</data>
     </node>
     <node id="86">
       <data key="pos">[131.24, 1167.2]</data>
       <data key="_pos">[5.824143859258926, -8.151736107453734]</data>
+      <data key="GT_pos">[5.824143859258926, -8.151736107453734]</data>
     </node>
     <node id="87">
       <data key="pos">[132.8, 1038.64]</data>
       <data key="_pos">[5.794440582393536, -8.185288354248463]</data>
+      <data key="GT_pos">[5.794440582393536, -8.185288354248463]</data>
     </node>
     <node id="88">
       <data key="pos">[1384.75, 1515.34]</data>
       <data key="_pos">[5.70160206820134, -7.760546614487524]</data>
+      <data key="GT_pos">[5.70160206820134, -7.760546614487524]</data>
     </node>
     <node id="89">
       <data key="pos">[1387.14, 1360.61]</data>
       <data key="_pos">[5.670072465152158, -7.783777318952241]</data>
+      <data key="GT_pos">[5.670072465152158, -7.783777318952241]</data>
     </node>
     <node id="90">
       <data key="pos">[1389.31, 1124.47]</data>
       <data key="_pos">[5.548465299684219, -7.860510704751084]</data>
+      <data key="GT_pos">[5.548465299684219, -7.860510704751084]</data>
     </node>
     <node id="91">
       <data key="pos">[1389.5, 1207.68]</data>
       <data key="_pos">[5.634933265384344, -7.808997984375458]</data>
+      <data key="GT_pos">[5.634933265384344, -7.808997984375458]</data>
     </node>
     <node id="92">
       <data key="pos">[1390.13, 1167.2]</data>
       <data key="_pos">[5.595511356161302, -7.840802270519992]</data>
+      <data key="GT_pos">[5.595511356161302, -7.840802270519992]</data>
     </node>
     <node id="93">
       <data key="pos">[1392.42, 794.88]</data>
       <data key="_pos">[5.442963310003974, -7.935074067904637]</data>
+      <data key="GT_pos">[5.442963310003974, -7.935074067904637]</data>
     </node>
     <node id="94">
       <data key="pos">[1395.53, 714.04]</data>
       <data key="_pos">[5.409570737594946, -7.957898146999292]</data>
+      <data key="GT_pos">[5.409570737594946, -7.957898146999292]</data>
     </node>
     <node id="95">
       <data key="pos">[1397.08, 880.39]</data>
       <data key="_pos">[5.473461785506731, -7.9076706726514345]</data>
+      <data key="GT_pos">[5.473461785506731, -7.9076706726514345]</data>
     </node>
     <node id="96">
       <data key="pos">[1397.08, 987.66]</data>
       <data key="_pos">[5.509069915490261, -7.882698328924543]</data>
+      <data key="GT_pos">[5.509069915490261, -7.882698328924543]</data>
     </node>
     <node id="97">
       <data key="pos">[1398.64, 602.1]</data>
       <data key="_pos">[5.372684635870809, -7.997227134959786]</data>
+      <data key="GT_pos">[5.372684635870809, -7.997227134959786]</data>
     </node>
     <node id="98">
       <data key="pos">[1400.19, 325.37]</data>
       <data key="_pos">[5.316635089096864, -8.070380010248499]</data>
+      <data key="GT_pos">[5.316635089096864, -8.070380010248499]</data>
     </node>
     <node id="99">
       <data key="pos">[1400.19, 477.73]</data>
       <data key="_pos">[5.342585713820959, -8.034154490646735]</data>
+      <data key="GT_pos">[5.342585713820959, -8.034154490646735]</data>
     </node>
     <node id="100">
       <data key="pos">[1403.3, 154.35]</data>
       <data key="_pos">[5.279607476534886, -8.136929014727489]</data>
+      <data key="GT_pos">[5.279607476534886, -8.136929014727489]</data>
     </node>
     <node id="101">
       <data key="pos">[1403.3, 228.98]</data>
       <data key="_pos">[5.299450644764632, -8.109694909839975]</data>
+      <data key="GT_pos">[5.299450644764632, -8.109694909839975]</data>
     </node>
     <node id="102">
       <data key="pos">[1404.86, 28.42]</data>
       <data key="_pos">[5.2902496014148195, -8.17413142029049]</data>
+      <data key="GT_pos">[5.2902496014148195, -8.17413142029049]</data>
     </node>
     <node id="103">
       <data key="pos">[1476.37, 1513.14]</data>
       <data key="_pos">[5.689615162944436, -7.722305744775562]</data>
+      <data key="GT_pos">[5.689615162944436, -7.722305744775562]</data>
     </node>
     <node id="104">
       <data key="pos">[1479.48, 1359.23]</data>
       <data key="_pos">[5.660778986928612, -7.745890628794462]</data>
+      <data key="GT_pos">[5.660778986928612, -7.745890628794462]</data>
     </node>
     <node id="105">
       <data key="pos">[1481.03, 1122.92]</data>
       <data key="_pos">[5.514366054085746, -7.839263210843399]</data>
+      <data key="GT_pos">[5.514366054085746, -7.839263210843399]</data>
     </node>
     <node id="106">
       <data key="pos">[1481.03, 1209.98]</data>
       <data key="_pos">[5.633276035029637, -7.767749321126796]</data>
+      <data key="GT_pos">[5.633276035029637, -7.767749321126796]</data>
     </node>
     <node id="107">
       <data key="pos">[1482.59, 986.11]</data>
       <data key="_pos">[5.480851866546311, -7.857153930341671]</data>
+      <data key="GT_pos">[5.480851866546311, -7.857153930341671]</data>
     </node>
     <node id="108">
       <data key="pos">[1484.14, 878.83]</data>
       <data key="_pos">[5.445896468267385, -7.881908606966825]</data>
+      <data key="GT_pos">[5.445896468267385, -7.881908606966825]</data>
     </node>
     <node id="109">
       <data key="pos">[1485.7, 717.15]</data>
       <data key="_pos">[5.4128053791839745, -7.911202418509418]</data>
+      <data key="GT_pos">[5.4128053791839745, -7.911202418509418]</data>
     </node>
     <node id="110">
       <data key="pos">[1487.25, 598.99]</data>
       <data key="_pos">[5.331784972179227, -7.991325618221448]</data>
+      <data key="GT_pos">[5.331784972179227, -7.991325618221448]</data>
     </node>
     <node id="111">
       <data key="pos">[1490.36, 476.17]</data>
       <data key="_pos">[5.307057528495476, -8.018790017341422]</data>
+      <data key="GT_pos">[5.307057528495476, -8.018790017341422]</data>
     </node>
     <node id="112">
       <data key="pos">[1491.92, 235.2]</data>
       <data key="_pos">[5.250850894941662, -8.075218908352902]</data>
+      <data key="GT_pos">[5.250850894941662, -8.075218908352902]</data>
     </node>
     <node id="113">
       <data key="pos">[1491.92, 325.37]</data>
       <data key="_pos">[5.280993037982762, -8.049807644325401]</data>
+      <data key="GT_pos">[5.280993037982762, -8.049807644325401]</data>
     </node>
     <node id="114">
       <data key="pos">[1493.47, 196.33]</data>
       <data key="_pos">[5.2617945663108046, -8.10928778012537]</data>
+      <data key="GT_pos">[5.2617945663108046, -8.10928778012537]</data>
     </node>
     <node id="115">
       <data key="pos">[160.34, 177.67]</data>
       <data key="_pos">[5.5698379959608735, -8.358077315820074]</data>
+      <data key="GT_pos">[5.5698379959608735, -8.358077315820074]</data>
     </node>
     <node id="116">
       <data key="pos">[179.77, 508.82]</data>
       <data key="_pos">[5.705838150749569, -8.323842973913477]</data>
+      <data key="GT_pos">[5.705838150749569, -8.323842973913477]</data>
     </node>
     <node id="117">
       <data key="pos">[179.77, 751.35]</data>
       <data key="_pos">[5.73720116931028, -8.272400747231014]</data>
+      <data key="GT_pos">[5.73720116931028, -8.272400747231014]</data>
     </node>
     <node id="118">
       <data key="pos">[182.88, 917.7]</data>
       <data key="_pos">[5.76474815714643, -8.223019977742256]</data>
+      <data key="GT_pos">[5.76474815714643, -8.223019977742256]</data>
     </node>
     <node id="119">
       <data key="pos">[234.18, 396.88]</data>
       <data key="_pos">[5.661925248214658, -8.346946934975131]</data>
+      <data key="GT_pos">[5.661925248214658, -8.346946934975131]</data>
     </node>
     <node id="120">
       <data key="pos">[240.4, 751.35]</data>
       <data key="_pos">[5.7056371798084475, -8.242793419699531]</data>
+      <data key="GT_pos">[5.7056371798084475, -8.242793419699531]</data>
     </node>
     <node id="121">
       <data key="pos">[265.28, 384.44]</data>
       <data key="_pos">[5.611972136496265, -8.337997508727844]</data>
+      <data key="GT_pos">[5.611972136496265, -8.337997508727844]</data>
     </node>
     <node id="122">
       <data key="pos">[300.99, 1515.34]</data>
       <data key="_pos">[5.8565069237720415, -8.052623024931806]</data>
+      <data key="GT_pos">[5.8565069237720415, -8.052623024931806]</data>
     </node>
     <node id="123">
       <data key="pos">[302.87, 1307.52]</data>
       <data key="_pos">[5.829019994114567, -8.086505934389882]</data>
+      <data key="GT_pos">[5.829019994114567, -8.086505934389882]</data>
     </node>
     <node id="124">
       <data key="pos">[304.14, 1167.2]</data>
       <data key="_pos">[5.799333749530363, -8.118358773442678]</data>
+      <data key="GT_pos">[5.799333749530363, -8.118358773442678]</data>
     </node>
     <node id="125">
       <data key="pos">[305.3, 1039.14]</data>
       <data key="_pos">[5.769670460582607, -8.14942581101307]</data>
+      <data key="GT_pos">[5.769670460582607, -8.14942581101307]</data>
     </node>
     <node id="126">
       <data key="pos">[306.42, 915.77]</data>
       <data key="_pos">[5.743078898804873, -8.178369174406573]</data>
+      <data key="GT_pos">[5.743078898804873, -8.178369174406573]</data>
     </node>
     <node id="127">
       <data key="pos">[318.91, 29.98]</data>
       <data key="_pos">[5.508774377000149, -8.349104345948078]</data>
+      <data key="GT_pos">[5.508774377000149, -8.349104345948078]</data>
     </node>
     <node id="128">
       <data key="pos">[320.47, 95.27]</data>
       <data key="_pos">[5.534883287702261, -8.343239561436018]</data>
+      <data key="GT_pos">[5.534883287702261, -8.343239561436018]</data>
     </node>
     <node id="129">
       <data key="pos">[361.67, 382.89]</data>
       <data key="_pos">[5.59432009849414, -8.29842379493723]</data>
+      <data key="GT_pos">[5.59432009849414, -8.29842379493723]</data>
     </node>
     <node id="130">
       <data key="pos">[372.55, 751.35]</data>
       <data key="_pos">[5.683734474514165, -8.218101014806283]</data>
+      <data key="GT_pos">[5.683734474514165, -8.218101014806283]</data>
     </node>
     <node id="131">
       <data key="pos">[389.65, 372.01]</data>
       <data key="_pos">[5.562436978313711, -8.289912057864845]</data>
+      <data key="GT_pos">[5.562436978313711, -8.289912057864845]</data>
     </node>
     <node id="132">
       <data key="pos">[428.52, 448.19]</data>
       <data key="_pos">[5.590230625832026, -8.256500178798166]</data>
+      <data key="GT_pos">[5.590230625832026, -8.256500178798166]</data>
     </node>
     <node id="133">
       <data key="pos">[430.07, 751.35]</data>
       <data key="_pos">[5.654152703840438, -8.180376196929805]</data>
+      <data key="GT_pos">[5.654152703840438, -8.180376196929805]</data>
     </node>
     <node id="134">
       <data key="pos">[431.63, 916.14]</data>
       <data key="_pos">[5.701248560843822, -8.15054919106807]</data>
+      <data key="GT_pos">[5.701248560843822, -8.15054919106807]</data>
     </node>
     <node id="135">
       <data key="pos">[434.74, 505.71]</data>
       <data key="_pos">[5.602132779614621, -8.211540651196099]</data>
+      <data key="GT_pos">[5.602132779614621, -8.211540651196099]</data>
     </node>
     <node id="136">
       <data key="pos">[464.28, 396.88]</data>
       <data key="_pos">[5.556221164702124, -8.262581293187017]</data>
+      <data key="GT_pos">[5.556221164702124, -8.262581293187017]</data>
     </node>
     <node id="137">
       <data key="pos">[479.04, 190.11]</data>
       <data key="_pos">[5.512940131367983, -8.313337194954261]</data>
+      <data key="GT_pos">[5.512940131367983, -8.313337194954261]</data>
     </node>
     <node id="138">
       <data key="pos">[481.38, 288.05]</data>
       <data key="_pos">[5.529992785248297, -8.286738920717472]</data>
+      <data key="GT_pos">[5.529992785248297, -8.286738920717472]</data>
     </node>
     <node id="139">
       <data key="pos">[481.67, 1515.34]</data>
       <data key="_pos">[5.81963023208828, -8.018861703107143]</data>
+      <data key="GT_pos">[5.81963023208828, -8.018861703107143]</data>
     </node>
     <node id="140">
       <data key="pos">[484.08, 1308.54]</data>
       <data key="_pos">[5.798627140775054, -8.05315110940895]</data>
+      <data key="GT_pos">[5.798627140775054, -8.05315110940895]</data>
     </node>
     <node id="141">
       <data key="pos">[485.74, 1167.2]</data>
       <data key="_pos">[5.769573144122943, -8.085710235112085]</data>
+      <data key="GT_pos">[5.769573144122943, -8.085710235112085]</data>
     </node>
     <node id="142">
       <data key="pos">[487.23, 1039.66]</data>
       <data key="_pos">[5.73706617788604, -8.118191831171128]</data>
+      <data key="GT_pos">[5.73706617788604, -8.118191831171128]</data>
     </node>
     <node id="143">
       <data key="pos">[53.84, 594.33]</data>
       <data key="_pos">[5.751552545510282, -8.36552551420753]</data>
+      <data key="GT_pos">[5.751552545510282, -8.36552551420753]</data>
     </node>
     <node id="144">
       <data key="pos">[53.84, 704.71]</data>
       <data key="_pos">[5.776017633489135, -8.335403611867273]</data>
+      <data key="GT_pos">[5.776017633489135, -8.335403611867273]</data>
     </node>
     <node id="145">
       <data key="pos">[548.23, 1167.2]</data>
       <data key="_pos">[5.741587496063703, -8.051236415009125]</data>
+      <data key="GT_pos">[5.741587496063703, -8.051236415009125]</data>
     </node>
     <node id="146">
       <data key="pos">[55.4, 1040.52]</data>
       <data key="_pos">[5.820746450359324, -8.213489274639644]</data>
+      <data key="GT_pos">[5.820746450359324, -8.213489274639644]</data>
     </node>
     <node id="147">
       <data key="pos">[55.4, 751.35]</data>
       <data key="_pos">[5.775688815516848, -8.290938722565391]</data>
+      <data key="GT_pos">[5.775688815516848, -8.290938722565391]</data>
     </node>
     <node id="148">
       <data key="pos">[55.4, 913.04]</data>
       <data key="_pos">[5.794651322677752, -8.249310292250163]</data>
+      <data key="GT_pos">[5.794651322677752, -8.249310292250163]</data>
     </node>
     <node id="149">
       <data key="pos">[56.95, 505.71]</data>
       <data key="_pos">[5.7109134329157065, -8.366323265403848]</data>
+      <data key="GT_pos">[5.7109134329157065, -8.366323265403848]</data>
     </node>
     <node id="150">
       <data key="pos">[562.22, 403.1]</data>
       <data key="_pos">[5.519393636612161, -8.25237358189793]</data>
+      <data key="GT_pos">[5.519393636612161, -8.25237358189793]</data>
     </node>
     <node id="151">
       <data key="pos">[562.22, 508.82]</data>
       <data key="_pos">[5.548555199425528, -8.205691444292425]</data>
+      <data key="GT_pos">[5.548555199425528, -8.205691444292425]</data>
     </node>
     <node id="152">
       <data key="pos">[562.22, 706.26]</data>
       <data key="_pos">[5.591822797477655, -8.140145019431264]</data>
+      <data key="GT_pos">[5.591822797477655, -8.140145019431264]</data>
     </node>
     <node id="153">
       <data key="pos">[563.77, 603.65]</data>
       <data key="_pos">[5.560604643531687, -8.164943102251415]</data>
+      <data key="GT_pos">[5.560604643531687, -8.164943102251415]</data>
     </node>
     <node id="154">
       <data key="pos">[563.77, 754.46]</data>
       <data key="_pos">[5.635266289820996, -8.135500552888027]</data>
+      <data key="GT_pos">[5.635266289820996, -8.135500552888027]</data>
     </node>
     <node id="155">
       <data key="pos">[563.78, 1039.89]</data>
       <data key="_pos">[5.708800531191248, -8.082100137649785]</data>
+      <data key="GT_pos">[5.708800531191248, -8.082100137649785]</data>
     </node>
     <node id="156">
       <data key="pos">[565.33, 917.7]</data>
       <data key="_pos">[5.674348797536795, -8.112877082499569]</data>
+      <data key="GT_pos">[5.674348797536795, -8.112877082499569]</data>
     </node>
     <node id="157">
       <data key="pos">[570.77, 31.53]</data>
       <data key="_pos">[5.482941392587727, -8.294789352917537]</data>
+      <data key="GT_pos">[5.482941392587727, -8.294789352917537]</data>
     </node>
     <node id="158">
       <data key="pos">[58.5, 187.0]</data>
       <data key="_pos">[5.58728403776441, -8.413614475903653]</data>
+      <data key="GT_pos">[5.58728403776441, -8.413614475903653]</data>
     </node>
     <node id="159">
       <data key="pos">[60.06, 1166.45]</data>
       <data key="_pos">[5.846561814453182, -8.18210526243757]</data>
+      <data key="GT_pos">[5.846561814453182, -8.18210526243757]</data>
     </node>
     <node id="160">
       <data key="pos">[60.06, 274.06]</data>
       <data key="_pos">[5.63156141161768, -8.412652393020412]</data>
+      <data key="GT_pos">[5.63156141161768, -8.412652393020412]</data>
     </node>
     <node id="161">
       <data key="pos">[60.06, 395.33]</data>
       <data key="_pos">[5.669769537414926, -8.385528450659937]</data>
+      <data key="GT_pos">[5.669769537414926, -8.385528450659937]</data>
     </node>
     <node id="162">
       <data key="pos">[60.84, 26.87]</data>
       <data key="_pos">[5.546540530378572, -8.38793703551318]</data>
+      <data key="GT_pos">[5.546540530378572, -8.38793703551318]</data>
     </node>
     <node id="163">
       <data key="pos">[608.87, 1309.24]</data>
       <data key="_pos">[5.770438262060131, -8.018188648111286]</data>
+      <data key="GT_pos">[5.770438262060131, -8.018188648111286]</data>
     </node>
     <node id="164">
       <data key="pos">[700.69, 1515.34]</data>
       <data key="_pos">[5.782693007256483, -7.974401439784099]</data>
+      <data key="GT_pos">[5.782693007256483, -7.974401439784099]</data>
     </node>
     <node id="165">
       <data key="pos">[702.48, 1309.77]</data>
       <data key="_pos">[5.74676116040182, -7.9904794214831645]</data>
+      <data key="GT_pos">[5.74676116040182, -7.9904794214831645]</data>
     </node>
     <node id="166">
       <data key="pos">[703.7, 710.93]</data>
       <data key="_pos">[5.568510512655422, -8.111617234817604]</data>
+      <data key="GT_pos">[5.568510512655422, -8.111617234817604]</data>
     </node>
     <node id="167">
       <data key="pos">[703.72, 1167.2]</data>
       <data key="_pos">[5.714129248003476, -8.016866729109035]</data>
+      <data key="GT_pos">[5.714129248003476, -8.016866729109035]</data>
     </node>
     <node id="168">
       <data key="pos">[704.82, 1040.29]</data>
       <data key="_pos">[5.680785829227243, -8.04495774469834]</data>
+      <data key="GT_pos">[5.680785829227243, -8.04495774469834]</data>
     </node>
     <node id="169">
       <data key="pos">[705.9, 915.77]</data>
       <data key="_pos">[5.647223038979491, -8.07761800998521]</data>
+      <data key="GT_pos">[5.647223038979491, -8.07761800998521]</data>
     </node>
     <node id="170">
       <data key="pos">[706.75, 819.06]</data>
       <data key="_pos">[5.6135416398537785, -8.09792549671006]</data>
+      <data key="GT_pos">[5.6135416398537785, -8.09792549671006]</data>
     </node>
     <node id="171">
       <data key="pos">[706.81, 603.65]</data>
       <data key="_pos">[5.534449599061178, -8.139378222141755]</data>
+      <data key="GT_pos">[5.534449599061178, -8.139378222141755]</data>
     </node>
     <node id="172">
       <data key="pos">[708.36, 308.27]</data>
       <data key="_pos">[5.457837132264067, -8.239827670170989]</data>
+      <data key="GT_pos">[5.457837132264067, -8.239827670170989]</data>
     </node>
     <node id="173">
       <data key="pos">[708.36, 403.1]</data>
       <data key="_pos">[5.49161462354718, -8.219083766932187]</data>
+      <data key="GT_pos">[5.49161462354718, -8.219083766932187]</data>
     </node>
     <node id="174">
       <data key="pos">[709.91, 465.29]</data>
       <data key="_pos">[5.509104580773517, -8.176488503627082]</data>
+      <data key="GT_pos">[5.509104580773517, -8.176488503627082]</data>
     </node>
     <node id="175">
       <data key="pos">[714.58, 28.42]</data>
       <data key="_pos">[5.428542463044235, -8.256991153997662]</data>
+      <data key="GT_pos">[5.428542463044235, -8.256991153997662]</data>
     </node>
     <node id="176">
       <data key="pos">[807.86, 429.53]</data>
       <data key="_pos">[5.477695935822159, -8.17621610601687]</data>
+      <data key="GT_pos">[5.477695935822159, -8.17621610601687]</data>
     </node>
     <node id="177">
       <data key="pos">[809.41, 403.1]</data>
       <data key="_pos">[5.465082804883632, -8.197092391033639]</data>
+      <data key="GT_pos">[5.465082804883632, -8.197092391033639]</data>
     </node>
     <node id="178">
       <data key="pos">[810.31, 309.81]</data>
       <data key="_pos">[5.445467000921712, -8.216654474857556]</data>
+      <data key="GT_pos">[5.445467000921712, -8.216654474857556]</data>
     </node>
     <node id="179">
       <data key="pos">[873.16, 892.82]</data>
       <data key="_pos">[5.6095587093035455, -8.058015126333391]</data>
+      <data key="GT_pos">[5.6095587093035455, -8.058015126333391]</data>
     </node>
     <node id="180">
       <data key="pos">[894.45, 1515.34]</data>
       <data key="_pos">[5.7771928729195166, -7.923601948586144]</data>
+      <data key="GT_pos">[5.7771928729195166, -7.923601948586144]</data>
     </node>
     <node id="181">
       <data key="pos">[895.99, 1422.24]</data>
       <data key="_pos">[5.750786635217084, -7.936665054123395]</data>
+      <data key="GT_pos">[5.750786635217084, -7.936665054123395]</data>
     </node>
     <node id="182">
       <data key="pos">[897.82, 1310.87]</data>
       <data key="_pos">[5.720594469846104, -7.957088383548664]</data>
+      <data key="GT_pos">[5.720594469846104, -7.957088383548664]</data>
     </node>
     <node id="183">
       <data key="pos">[900.19, 1167.2]</data>
       <data key="_pos">[5.6883024215337645, -7.980273767648552]</data>
+      <data key="GT_pos">[5.6883024215337645, -7.980273767648552]</data>
     </node>
     <node id="184">
       <data key="pos">[902.27, 1040.86]</data>
       <data key="_pos">[5.654052609753765, -8.00349603239247]</data>
+      <data key="GT_pos">[5.654052609753765, -8.00349603239247]</data>
     </node>
     <node id="185">
       <data key="pos">[902.69, 712.48]</data>
       <data key="_pos">[5.536760843353142, -8.077955773491547]</data>
+      <data key="GT_pos">[5.536760843353142, -8.077955773491547]</data>
     </node>
     <node id="186">
       <data key="pos">[902.69, 913.04]</data>
       <data key="_pos">[5.6149365503198325, -8.015141521106777]</data>
+      <data key="GT_pos">[5.6149365503198325, -8.015141521106777]</data>
     </node>
     <node id="187">
       <data key="pos">[904.25, 877.28]</data>
       <data key="_pos">[5.565209003875222, -8.048395007140936]</data>
+      <data key="GT_pos">[5.565209003875222, -8.048395007140936]</data>
     </node>
     <node id="188">
       <data key="pos">[905.8, 477.73]</data>
       <data key="_pos">[5.477350694967553, -8.13903281484505]</data>
+      <data key="GT_pos">[5.477350694967553, -8.13903281484505]</data>
     </node>
     <node id="189">
       <data key="pos">[905.8, 606.76]</data>
       <data key="_pos">[5.505508887592786, -8.107316140574781]</data>
+      <data key="GT_pos">[5.505508887592786, -8.107316140574781]</data>
     </node>
     <node id="190">
       <data key="pos">[908.91, 308.27]</data>
       <data key="_pos">[5.4285258962505, -8.195399835728322]</data>
+      <data key="GT_pos">[5.4285258962505, -8.195399835728322]</data>
     </node>
     <node id="191">
       <data key="pos">[908.91, 399.99]</data>
       <data key="_pos">[5.448615895647069, -8.165600076112701]</data>
+      <data key="GT_pos">[5.448615895647069, -8.165600076112701]</data>
     </node>
     <edge source="0" target="84" />
     <edge source="1" target="160" />
@@ -1073,5 +1267,6 @@
     <edge source="188" target="189" />
     <edge source="188" target="191" />
     <edge source="190" target="191" />
+    <data key="GroundTruth_JSON">{"GT_pos": [[5.921459703478945, -8.117773167403891], [5.637171186335095, -8.443029588883809], [5.768854709641291, -8.39158669758842], [5.800900886426795, -8.306072059048383], [5.819477560861741, -8.266683505252239], [5.846592911017057, -8.230715818569427], [5.87617609626587, -8.194712400037124], [5.679449234968184, -8.414183292073877], [5.7211333429479225, -8.39464729884891], [5.8011176581442125, -8.354371888397377], [5.585466016455266, -8.444703630134729], [5.545758285985785, -8.419986698103841], [5.784346399794472, -7.864238904251308], [5.355421689606658, -8.23083454948469], [5.76555231213618, -7.821260753724144], [5.74359322707159, -7.781005340960597], [5.9256795270885085, -8.048886450959106], [5.725063117465345, -7.739984978945946], [5.258511387658494, -8.181844569364012], [5.710753952046866, -7.696988548097694], [5.5095469767413885, -7.808119154985278], [5.611916022117172, -7.7451785711044705], [5.424751172537451, -7.857676059468924], [5.683099305188517, -7.689883827873126], [5.465100180989704, -7.829202144338756], [5.6476920184800665, -7.716845320392097], [5.386810344873203, -7.893605390020089], [5.2533172134143555, -8.034440084026738], [5.281490205327196, -7.9995516832763744], [5.277115634977044, -8.202613352949276], [5.23079042454071, -8.118344085659439], [5.219079277051352, -8.06995819297385], [5.31389763480208, -7.965535785099044], [5.880443835636596, -8.035256615530212], [5.48716525043671, -8.371823342991291], [5.932494906268232, -8.075320741484465], [5.846558975490903, -8.0043751997923], [5.4606193267264445, -8.316330432997038], [5.805947699059648, -7.9521272163516885], [5.52194903170756, -8.409565693107066], [5.81343539340473, -7.975744726230596], [5.407599921879675, -8.281033047633494], [5.805282428013988, -7.908060054235598], [5.40745114049447, -8.215119017226746], [5.862860426351704, -8.15355825956404], [5.757242357011605, -7.880473869358413], [5.721648907449568, -7.896039887308029], [5.544104778134785, -8.011787709276152], [5.696885692197437, -7.920876451457382], [5.663627534762417, -7.943626579555822], [5.627958045280328, -7.967560125608002], [5.584967000795056, -7.983444912734587], [5.507653839214896, -8.043220729466778], [5.4438268518315285, -8.108576818102383], [5.474075127596743, -8.075716357865799], [5.41460832369679, -8.138478826614376], [5.385524906709678, -8.161531558998082], [5.378680659879973, -8.209167125180596], [5.739165267760649, -7.8387953748630945], [5.641901638305074, -7.907096270287295], [5.608020615565041, -7.935478961960878], [5.47676570438013, -8.011596563060953], [5.519051202146737, -7.976088106513535], [5.682024727096232, -7.884272060358922], [5.561715774549539, -7.942534429377156], [5.707971067693051, -7.857657005011044], [5.3795169086082275, -8.119634499602075], [5.44134123281561, -8.047141254512667], [5.4095951477307205, -8.082872343157362], [5.718693177498339, -7.799865194123981], [5.687408518058364, -7.821169386991508], [5.653704923681901, -7.846896183378868], [5.614063552368969, -7.872841801259335], [5.497414078238131, -7.938302947220044], [5.567854583011483, -7.895792787596849], [5.43710436555519, -7.988118442297863], [5.406202469755998, -8.021403849381356], [5.4607734789461535, -7.956121137867258], [5.532685333302513, -7.91433377283776], [5.3512734860002995, -8.091911255984948], [5.376877874522962, -8.05663552637179], [5.338518627810966, -8.127682704124684], [5.335726326100834, -8.174893786823928], [5.900138354409845, -8.069068236907802], [5.892192360765904, -8.104761043943952], [5.854002643023903, -8.121815262186523], [5.824143859258926, -8.151736107453734], [5.794440582393536, -8.185288354248463], [5.70160206820134, -7.760546614487524], [5.670072465152158, -7.783777318952241], [5.548465299684219, -7.860510704751084], [5.634933265384344, -7.808997984375458], [5.595511356161302, -7.840802270519992], [5.442963310003974, -7.935074067904637], [5.409570737594946, -7.957898146999292], [5.473461785506731, -7.9076706726514345], [5.509069915490261, -7.882698328924543], [5.372684635870809, -7.997227134959786], [5.316635089096864, -8.070380010248499], [5.342585713820959, -8.034154490646735], [5.279607476534886, -8.136929014727489], [5.299450644764632, -8.109694909839975], [5.2902496014148195, -8.17413142029049], [5.689615162944436, -7.722305744775562], [5.660778986928612, -7.745890628794462], [5.514366054085746, -7.839263210843399], [5.633276035029637, -7.767749321126796], [5.480851866546311, -7.857153930341671], [5.445896468267385, -7.881908606966825], [5.4128053791839745, -7.911202418509418], [5.331784972179227, -7.991325618221448], [5.307057528495476, -8.018790017341422], [5.250850894941662, -8.075218908352902], [5.280993037982762, -8.049807644325401], [5.2617945663108046, -8.10928778012537], [5.5698379959608735, -8.358077315820074], [5.705838150749569, -8.323842973913477], [5.73720116931028, -8.272400747231014], [5.76474815714643, -8.223019977742256], [5.661925248214658, -8.346946934975131], [5.7056371798084475, -8.242793419699531], [5.611972136496265, -8.337997508727844], [5.8565069237720415, -8.052623024931806], [5.829019994114567, -8.086505934389882], [5.799333749530363, -8.118358773442678], [5.769670460582607, -8.14942581101307], [5.743078898804873, -8.178369174406573], [5.508774377000149, -8.349104345948078], [5.534883287702261, -8.343239561436018], [5.59432009849414, -8.29842379493723], [5.683734474514165, -8.218101014806283], [5.562436978313711, -8.289912057864845], [5.590230625832026, -8.256500178798166], [5.654152703840438, -8.180376196929805], [5.701248560843822, -8.15054919106807], [5.602132779614621, -8.211540651196099], [5.556221164702124, -8.262581293187017], [5.512940131367983, -8.313337194954261], [5.529992785248297, -8.286738920717472], [5.81963023208828, -8.018861703107143], [5.798627140775054, -8.05315110940895], [5.769573144122943, -8.085710235112085], [5.73706617788604, -8.118191831171128], [5.751552545510282, -8.36552551420753], [5.776017633489135, -8.335403611867273], [5.741587496063703, -8.051236415009125], [5.820746450359324, -8.213489274639644], [5.775688815516848, -8.290938722565391], [5.794651322677752, -8.249310292250163], [5.7109134329157065, -8.366323265403848], [5.519393636612161, -8.25237358189793], [5.548555199425528, -8.205691444292425], [5.591822797477655, -8.140145019431264], [5.560604643531687, -8.164943102251415], [5.635266289820996, -8.135500552888027], [5.708800531191248, -8.082100137649785], [5.674348797536795, -8.112877082499569], [5.482941392587727, -8.294789352917537], [5.58728403776441, -8.413614475903653], [5.846561814453182, -8.18210526243757], [5.63156141161768, -8.412652393020412], [5.669769537414926, -8.385528450659937], [5.546540530378572, -8.38793703551318], [5.770438262060131, -8.018188648111286], [5.782693007256483, -7.974401439784099], [5.74676116040182, -7.9904794214831645], [5.568510512655422, -8.111617234817604], [5.714129248003476, -8.016866729109035], [5.680785829227243, -8.04495774469834], [5.647223038979491, -8.07761800998521], [5.6135416398537785, -8.09792549671006], [5.534449599061178, -8.139378222141755], [5.457837132264067, -8.239827670170989], [5.49161462354718, -8.219083766932187], [5.509104580773517, -8.176488503627082], [5.428542463044235, -8.256991153997662], [5.477695935822159, -8.17621610601687], [5.465082804883632, -8.197092391033639], [5.445467000921712, -8.216654474857556], [5.6095587093035455, -8.058015126333391], [5.7771928729195166, -7.923601948586144], [5.750786635217084, -7.936665054123395], [5.720594469846104, -7.957088383548664], [5.6883024215337645, -7.980273767648552], [5.654052609753765, -8.00349603239247], [5.536760843353142, -8.077955773491547], [5.6149365503198325, -8.015141521106777], [5.565209003875222, -8.048395007140936], [5.477350694967553, -8.13903281484505], [5.505508887592786, -8.107316140574781], [5.4285258962505, -8.195399835728322], [5.448615895647069, -8.165600076112701]]}</data>
   </graph>
 </graphml>
