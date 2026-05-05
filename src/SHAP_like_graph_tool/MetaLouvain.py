@@ -292,7 +292,9 @@ def induced_null_model(new_node2com, null_model):
         len_com2=len(new_com2nodes[com2])
         nb_combinations=len_com1*len_com2/2
         if nb_combinations>100000:
-            sample_size=max([len_com1,len_com2])*20
+            requested_size = max([len_com1, len_com2]) * 20
+            sample_size = min([len_com1, len_com2, requested_size])
+            
             sample=zip(random.sample(new_com2nodes[com1],sample_size),random.sample(new_com2nodes[com2],sample_size))
         else:
             if com1==com2:

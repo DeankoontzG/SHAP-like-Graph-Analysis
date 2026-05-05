@@ -205,7 +205,7 @@ def generate_graph_from_probs(P, sbm_groups=None, positions=None):
         
     return g
 
-def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False, nb_iter = ""):
+def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k, degrees, commu, e_rs, name="00_OUBLI_DE_NOM", save_P_matrix = False, nb_iter = "", agg_method=""):
     results_list = []
     all_P_matrices = {}
 
@@ -217,6 +217,35 @@ def generate_graph_benchmarks(Hybrid_ratios_list, P_sbm, P_spatial, position, k,
         print("\n" + "="*90)
         
         P_hybride = P_sbm * alpha + P_spatial * (1 - alpha)
+        if agg_method == "Custom_exposant" : 
+            kpow = 4
+            tol = 1e-2
+            target_expectation = alpha * np.sum(P_sbm) + (1 - alpha) * np.sum(P_spatial)
+            P_base = alpha * (P_sbm**kpow) + (1 - alpha) * (P_spatial**kpow)
+            def get_expectation(j):
+                return np.sum(P_base**j)
+        
+            j_min, j_max = 0.1, 50.0 
+            if get_expectation(j_max) > target_expectation:
+                j_max = 800.0
+        
+            for _ in range(100):  
+                j_mid = (j_min + j_max) / 2
+                current_exp = get_expectation(j_mid)
+                
+                if abs(current_exp - target_expectation) < tol:
+                    break
+                
+                if current_exp > target_expectation:
+                    j_min = j_mid
+                else:
+                    j_max = j_mid
+                    
+            P_hybride = P_base**j_mid
+            norm_facteur = target_expectation/np.sum(P_base)
+            print(f"-- Aggrégation par exposant réussie, avec une puissance j={j_mid}")
+            print(f"-- Remplace un facteur de normalisation classique de {norm_facteur}")
+            
         alpha_key = round(alpha, 2)
         all_P_matrices[alpha_key] = P_hybride.copy()
         g_hybride = generate_graph_from_probs(P_hybride)

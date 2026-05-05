@@ -369,6 +369,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_90 = ["spatial_louvain_manualiter_0_90_density"]
     features_commu_inferee_spatial_based_manual_reg = ["spatial_louvain_manualreg_density"]
     features_commu_inferee_spatial_based_scgravity = ["spatial_louvain_scgravity_density"]
     features_commu_inferee_spatial_based_wrdb = ["spatial_louvain_wrdb_density"]
@@ -377,6 +379,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
+        "Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
         #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
         #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
@@ -384,6 +388,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,
         #"GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
        # "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
         #"GT_pos + Inferred_Commu spatial wrdb": features_GT_pos + features_commu_inferee_spatial_based_wrdb,
@@ -397,17 +403,187 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
 
     all_results = []
 
-    """
     tasks = [
         (nb_iter, i) 
         for nb_iter in range(1, nb_iterations + 1) 
         for i in np.linspace(i_max, i_min, nb_i)
     ]
-    """
 
-    """
+    cores_to_use = max(1, os.cpu_count() -2)
+
+    print(f"Lancement de la parallélisation sur {cores_to_use} coeurs pour {len(tasks)} tâches...")
+
+    # Exécution parallèle
+    results_nested = Parallel(n_jobs=cores_to_use)(
+        delayed(run_single_experiment)(nb_iter, i, spatial_ref, G_name_short, experiments) 
+        for nb_iter, i in tasks
+    )
+
+
+    # Aplatir la liste de listes
+    all_results = [item for sublist in results_nested for item in sublist]
+
+    all_results = pd.DataFrame(all_results)
+    
+    output_dir = "outputs/results"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"comparaison_perfs_commus_{G_name_short}_{nb_iterations}iter_{name_export_results}.csv")
+    all_results.to_csv(output_path, index=False)
+    print(f" Succès ! Fichier sauvegardé dans : {output_path}")
+    return all_results
+
+def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
+        """
+        Fonction exécutée par un cœur unique pour une valeur de i et une itération donnée.
+        """
+        sbm_val = f"{i:.2f}"
+        pos_val = f"{1-i:.2f}"
+        if spatial_ref == "GT_Pos" or spatial_ref == "GT_pos" : 
+            spatial_ref = ""
+        else :
+            spatial_ref = f"_{spatial_ref}"
+        G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+    
+
+        # 1. Chargement des données d'entraînement
+        _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)
+        local_results = []
+
+        for exp_name, feat_list in experiments.items():
+            missing = set(feat_list) - set(dataset_train.columns)
+            if missing:
+                print(f" Exp {exp_name} : colonnes manquantes {missing}. Skip.")
+                print(set(dataset_train.columns))
+                continue
+
+            print(f" Running: {exp_name} for SBM={i}")
         
-    """
+            Params = {
+                'max_depth': 3,             # Faible profondeur pour éviter l'overfitting sur 2 variables
+                'learning_rate': 0.1,       # Compromis idéal vitesse/précision
+                'n_estimators': 1000,       # On met beaucoup, l'early stopping fera le reste
+                'subsample': 1.0,           # On garde 100% des lignes (plus stable pour peu de features)
+                'colsample_bytree': 1.0,    # On garde les 2 features à chaque split
+                'objective': 'binary:logistic', 
+                'tree_method': 'hist',      # Accélère l'entraînement sur de gros datasets
+                'reg_lambda': 1,            # Régularisation L2 pour stabiliser les poids
+                'n_jobs': 1                # Utilise 1 seul coeur, pour la parallélisation
+            }
+
+            stats_df, model, _, _, _, _ = train_and_test_xgboost(dataset_train, features=feat_list, parameters = Params, plot=False)
+
+            importances = model.feature_importances_
+            feat_imp_series = pd.Series(importances, index=feat_list).sort_values(ascending=False)
+                
+            # Évaluation sur le dataset de référence FIXE (Graphe SBM 1.0)
+            X_eval_fixed = dataset_eval[feat_list] 
+            stats_eval_df = get_performance_metrics(model, X_eval_fixed, dataset_eval["target"], "EXP_")
+            
+            local_results.append({
+                "G_name" : G_name,
+                "Ratio_SBM": i,
+                "Iter": nb_iter,
+                "Experiment": exp_name,
+                "AP_train": stats_df["Test_AP"].iloc[0],
+                "AUC-ROC_train": stats_df["Test_AUC-ROC"].iloc[0],
+                "AP_eval": stats_eval_df["EXP_AP"].iloc[0],
+                "AUC-ROC_eval": stats_eval_df["EXP_AUC-ROC"].iloc[0],
+                "Top_Feature": feat_imp_series.index[0], # On stocke la #1 pour analyse
+                "Top_Importance": feat_imp_series.iloc[0]
+            })
+
+        return local_results
+
+def compute_commus_greels(G, G_name, spatial_ref = "GT_pos"):
+
+    validate_input_graph(G)
+    print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
+
+    if 'GroundTruth_JSON' in G.graph:
+        print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
+        gt_raw = json.loads(G.graph['GroundTruth_JSON'])
+        raw_pos = gt_raw.get('GT_pos', [])
+        gt_pos_array = np.array(raw_pos, dtype=float)
+
+        """
+        GT = {'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
+            'GT_pos': np.array(gt_raw['GT_pos']),
+            'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
+            'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']),
+            'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial'])
+                }
+        """
+        GT = {'GT_pos': gt_pos_array}
+                
+        if 'P_matrix_JSON' in G.graph:
+            print("P_matrix trouvée.")
+            GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
+    else:
+        print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
+        GT = None
+
+    if GT is not None and 'GT_pos' in GT:
+            for i, node_id in enumerate(G.nodes()):
+                G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
+    
+    G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
+    G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
+
+    if spatial_ref == "deepwalk": 
+        G_train = computeDistanceFeatures(G_train)
+        G_kept = computeDistanceFeatures(G_kept)
+        
+    G_train_with_communities = computeCommunityFeatures(G_train, spatial_ref=spatial_ref)
+    G_kept_with_communities = computeCommunityFeatures(G_kept, spatial_ref=spatial_ref)
+
+    print("Save : graph pour exploration commus")
+    loadsave_data_joblib(data=G_kept_with_communities, filename=f"G_kept_w_struct_com_dist_{G_name}", mode="save")
+    
+    
+    dataset_train = prepare_balanced_data(G_test, G_train_with_communities,  negative_ratio=10.0, GroundTruth=GT)
+    dataset_hidden = prepare_balanced_data(G_hidden, G_kept_with_communities, negative_ratio=50.0, GroundTruth=GT)
+
+    print("Vérif : colonnes du dataset :")
+    print(dataset_train.columns)
+
+    print("Sauvegarde des datasets")
+    save_dataset(dataset=dataset_train, filename=f"dataset_train_{G_name}")
+    save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
+    
+
+def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
+    features_GT_proba = ['GT_proba']
+    features_GT_pos = ['GT_pos_dist', 
+                       #'GT_spatial_deg_product', 
+                    #'GT_spatial_gravity_log', 'GT_degrees_spatial_u','GT_degrees_spatial_v'
+                    ]
+    features_commu_inferee_normal = ["louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_90 = ["spatial_louvain_manualiter_0_90_density"]
+    features_commu_inferee_spatial_based_manual_reg = ["spatial_louvain_manualreg_density"]
+    features_commu_inferee_spatial_based_scgravity = ["spatial_louvain_scgravity_density"]
+    features_commu_inferee_spatial_based_wrdb = ["spatial_louvain_wrdb_density"]
+    features_deepwalk = ["deepwalk_dist"]
+
+    experiments = {
+        "Inferred_Commu_normal": features_commu_inferee_normal,
+        "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
+        "Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
+        #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
+        #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
+        #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
+        #"GT_proba": features_GT_proba,
+        "GT_pos": features_GT_pos,
+        "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
+        "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90
+    }
+    
+
+    all_results = []
     
     G_names_list = [
         "Airports",
@@ -425,14 +601,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     print(f"Lancement de la parallélisation sur {cores_to_use} coeurs pour {len(tasks)} tâches...")
 
     # Exécution parallèle
-    """
     results_nested = Parallel(n_jobs=cores_to_use)(
-        delayed(run_single_experiment)(nb_iter, i, spatial_ref, G_name_short, experiments) 
-        for nb_iter, i in tasks
-    )
-    """
-    results_nested = Parallel(n_jobs=cores_to_use)(
-        delayed(run_single_experiment)(0, 0, "_pos", G_name_short, experiments) 
+        delayed(run_single_experiment_greels)(0, 0, "_pos", G_name_short, experiments) 
         for G_name_short in tasks
     )
 
@@ -448,7 +618,7 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     print(f" Succès ! Fichier sauvegardé dans : {output_path}")
     return all_results
 
-def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
+def run_single_experiment_greels(nb_iter, i, spatial_ref, G_name_short, experiments):
         """
         Fonction exécutée par un cœur unique pour une valeur de i et une itération donnée.
         """

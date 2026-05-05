@@ -5,11 +5,13 @@ from re import X
 import numpy as np
 import pandas as pd
 import networkx as nx
+import networkx.algorithms.community as nx_comm
+from networkx.algorithms.community import louvain_communities
+import inspect
 import igraph as ig
 from pyvis.network import Network
 import itertools
 from math import factorial
-from networkx.algorithms.community import louvain_communities
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
@@ -54,7 +56,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain", 
+'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_80", "spatial_louvain_manualiter_0_90"
     #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
@@ -340,66 +342,68 @@ def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
     
     return len(robust_commus) >= K_min
 
+
 def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolutions=None, **kwargs):
     """
-    Explore une liste de résolutions et retourne la partition maximisant le ratio de densité.
+    Explore les résolutions et s'arrête dès que la condition K_min est remplie.
     """
     if resolutions is None:
-        resolutions = [0.5, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0]
+        resolutions = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
 
-    # --- Filtrage des arguments ---
+    null_model = kwargs.get('null_model', None)
     sig = inspect.signature(partition_func)
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
     
-    best_score = -1
-    best_partition = None
-    N = G.number_of_nodes()
-
+    best_modularity_backup = -1.0
+    best_modularity = -1.0
+    best_overall_partition = None
+    best_overall_partition_backup = None
+    best_res = -1.0
+    best_res_backup = -1.0 
+    
     for res in resolutions:
-        communities_list = partition_func(G, resolution=res, **filtered_kwargs)
+        communities_raw = partition_func(G, resolution=res, **filtered_kwargs)
         
-        # Formatage en partition_dict et groupement par nœuds
-        partition_dict = {} 
-        nodes_by_comm = {}
-        for i, community in enumerate(communities_list):
-            nodes_list = list(community)
-            nodes_by_comm[i] = nodes_list
-            for node in nodes_list:
-                partition_dict[node] = i
+        # 2. UNIFICATION DU FORMAT -> On veut un dictionnaire {node: com_id}
+        if isinstance(communities_raw, dict):
+            partition_dict = communities_raw
+        else:
+            # Si c'est une liste de sets (cas de nx.louvain_communities)
+            partition_dict = {}
+            for i, community in enumerate(communities_raw):
+                for node in community:
+                    partition_dict[node] = i
         
-        # Validation que la partition a suffisamment de commus intéressantes (3)
-        if not is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):
-            continue
+        com_groups = {}
+        for node, com in partition_dict.items():
+            com_groups.setdefault(com, set()).add(node)
+        comm_sets = list(com_groups.values())
 
-        # Calcul du score de Ratio de Densité 
-        current_ratios = []
-        node_degrees = dict(G.degree())
+        if null_model is not None:
+            curr_mod = metamodularity(partition_dict, G, null_model)
+        else:
+            curr_mod = nx_comm.modularity(G, comm_sets)
         
-        for c, nodes in nodes_by_comm.items():
-            n_s = len(nodes)
-            if n_s < 2: continue
+        if is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):            
+            if curr_mod > best_modularity:
+                best_modularity = curr_mod
+                best_overall_partition = partition_dict.copy()
+                best_res = res
+        else : 
+            if curr_mod > best_modularity_backup:
+                best_modularity_backup = curr_mod
+                best_overall_partition_backup = partition_dict.copy()
+                best_res_backup = res
             
-            m_in = G.subgraph(nodes).number_of_edges()
-            vol_s = sum(node_degrees[n] for n in nodes)
-            m_out = vol_s - (2 * m_in) # Car les liens internes comptent pour 2 ds les degrés (2 noeuds)
-            
-            possible_in = n_s * (n_s - 1) / 2
-            possible_out = n_s * (N - n_s)
-            
-            rho_in = m_in / possible_in if possible_in > 0 else 0
-            rho_out = m_out / possible_out if possible_out > 0 else 0
-            
-            current_ratios.append(rho_in / rho_out if rho_out > 0 else rho_in * 100)
 
-        avg_ratio = sum(current_ratios) / len(current_ratios) if current_ratios else 0
-        
-        if avg_ratio > best_score:
-            best_score = avg_ratio
-            best_partition = partition_dict
+    if best_overall_partition is None : 
+        print(f"Attention : Critère K_min={K_min} non satisfait. Retour de la meilleure modularité ({best_modularity_backup:.3f})")
+        best_overall_partition = best_overall_partition_backup
 
-    final_partition = best_partition if best_partition else partition_dict
-
-    return final_partition
+    print(f" Meilleure résolution : {best_res}")
+    
+    return best_overall_partition
+    
 
 def _appendLouvainCommunities(G_train, K_min=3, min_edge_ratio=0.01):
     best_p = _find_best_partition(
@@ -539,6 +543,20 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "ManualIter":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "ManualIter_0_80":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+
+        degrees = np.array([d for n, d in G_train.degree(nodes)])
+        m2 = np.sum(degrees)
+        P_config = np.outer(degrees, degrees) / m2
+        P = (0.8 * P) + (0.2 * P_config)
+    elif NullModel_method == "ManualIter_0_90":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+
+        degrees = np.array([d for n, d in G_train.degree(nodes)])
+        m2 = np.sum(degrees)
+        P_config = np.outer(degrees, degrees) / m2
+        P = (0.9 * P) + (0.1 * P_config)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
     elif NullModel_method == "scgravity": 
@@ -565,7 +583,7 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
     # Appel de l'algorithme développé dans MetaLouvain.py, dans la loop qui cherche la best partition
     partition = _find_best_partition(
         G_train, 
-        nx.community.louvain_communities, 
+        best_partition, 
         K_min=K_min, 
         min_edge_ratio=min_edge_ratio,
         null_model=my_matrix_null_model
@@ -597,6 +615,12 @@ def _appendSpatialLouvainCommunities_ManualReg(G_train, pos_attr="GT_pos"):
 
 def _appendSpatialLouvainCommunities_radiation(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_radiation_id" , NullModel_method = "Radiation")
+
+def _appendSpatialLouvainCommunities_ManualIter_0_80(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_80_id" , NullModel_method = "ManualIter_0_80")
+
+def _appendSpatialLouvainCommunities_ManualIter_0_90(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_90_id" , NullModel_method = "ManualIter_0_90")
 
 
 def _normalize_community_assignment(G, attr_name):
@@ -1055,32 +1079,6 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
             # MISE À JOUR BRIDÉE : On ne bouge pas de plus de 2.0 par étape
             step = f_x / f_prime
             alphas -= 0.5 * np.clip(step, -2.0, 2.0)
-       
-        """ 
-        for i in range(n):
-            if degrees[i] == 0:
-                alphas[i] = -20.0 # Valeur arbitrairement basse pour p -> 0
-                continue
-            
-            # Préparation des données pour le noeud i (on exclut j=i)
-            mask = np.ones(n, dtype=bool)
-            mask[i] = False
-            
-            # On passe les constantes nécessaires à func_alpha_i
-            res = root_scalar(
-                f = lambda x: func_alpha_i(
-                    alpha_i=x, 
-                    other_alphas=alphas[mask], 
-                    dist_row_i=dist_matrix[i, mask], 
-                    current_beta=beta, 
-                    target_k=degrees[i]
-                ),
-                x0=alphas[i], 
-                fprime=True, # L'algo s'attend à recevoir f(x), f'(x)
-                method='newton'
-            )
-            alphas[i] = res.root
-        """
             
         # 2. Mise à jour de beta
         res_beta = minimize_scalar(
@@ -1104,18 +1102,6 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
         
         if mae_degrees < tol:
             break
-
-    """
-    print(f"Distances : min={dist_matrix.min():.2f}, max={dist_matrix.max():.2f}, mean={dist_matrix.mean():.2f}")
-    test_beta = 1.0
-    test_ll = total_log_likelihood_beta(test_beta, alphas)
-    print(f"LL pour beta=1.0 : {test_ll}")
-    test_ll_0 = total_log_likelihood_beta(0.0, alphas)
-    print(f"LL pour beta=0.0 : {test_ll_0}")
-
-    if test_ll > test_ll_0:
-        print("ALERTE : La vraisemblance est meilleure à beta=0 qu'à beta=1. Le problème est dans les données ou le signe de LL.")
-    """
 
     print(f"Modèle gravitaire inféré, avec une MAE de {mae_degrees}, alpha moy = {np.mean(alphas):.4f} et beta = {beta}")  
     A_sum = len(G.edges())
@@ -1224,7 +1210,9 @@ COMMUNITY_MAPPING = {
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
     "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
     #"spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation,
-    "spatial_louvain_manualreg" : _appendSpatialLouvainCommunities_ManualReg
+    "spatial_louvain_manualreg" : _appendSpatialLouvainCommunities_ManualReg,
+    "spatial_louvain_manualiter_0_80" : _appendSpatialLouvainCommunities_ManualIter_0_80,
+    "spatial_louvain_manualiter_0_90" : _appendSpatialLouvainCommunities_ManualIter_0_90
 }
 
 
