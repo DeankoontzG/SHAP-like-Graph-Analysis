@@ -384,7 +384,7 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
         #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
         #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
-        #"GT_proba": features_GT_proba,
+        "GT_proba": features_GT_proba,
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
