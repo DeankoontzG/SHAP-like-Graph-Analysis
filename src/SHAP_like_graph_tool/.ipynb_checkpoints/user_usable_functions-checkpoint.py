@@ -369,6 +369,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_20 = ["spatial_louvain_manualiter_0_20_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_50 = ["spatial_louvain_manualiter_0_50_density"]
     features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
     features_commu_inferee_spatial_based_manual_iter_0_90 = ["spatial_louvain_manualiter_0_90_density"]
     features_commu_inferee_spatial_based_manual_reg = ["spatial_louvain_manualreg_density"]
@@ -379,15 +381,19 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
+        "Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
         "Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
         "Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
         #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
         #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
-        "GT_proba": features_GT_proba,
+        #"GT_proba": features_GT_proba,
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
         "GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
         "GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,
         #"GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,

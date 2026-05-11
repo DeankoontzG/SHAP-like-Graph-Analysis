@@ -117,7 +117,7 @@ if __name__ == "__main__":
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
-    
+    """
 
     
     start_time = time.time()
@@ -129,15 +129,15 @@ if __name__ == "__main__":
     print("="*50)
     print(f"{duration} secs")
 
-    
-    "fullerene_structures_C1500",
-        "urban_streets_savannah",
-        "urban_streets_seoul",
-        "urban_streets_washington",
-        "facebook_organizations_S1",
-        "facebook_organizations_S2",
-    
     """
+    #"fullerene_structures_C1500",
+    #"urban_streets_savannah",
+    #"urban_streets_seoul",
+    #"urban_streets_washington",
+    #"facebook_organizations_S1",
+    #"facebook_organizations_S2",
+    
+    
     
     
     G_names_list = [
@@ -146,7 +146,7 @@ if __name__ == "__main__":
         "faa_routes"
     ]
 
-    """
+    
     for iteration in range (4):
         for G_name in G_names_list : 
             G_name_bis = f"{G_name}_{iteration}"
@@ -195,8 +195,9 @@ if __name__ == "__main__":
             gp.compute_commus_greels(G, G_name_bis, "GT_pos")            
             end_time = time.time()
             duration = end_time - start_time
-        """
+        
         
 
     gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")
+    """
    

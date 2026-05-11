@@ -373,6 +373,9 @@ def calculate_surprise(G, partition_dict):
         # Paires possibles dans cette communauté : ni * (ni-1) / 2
         P += ni * (ni - 1) / 2
 
+    if P <= 0 or P >= M:
+        return 0
+
     # 3. Calcul de la Surprise via l'approximation KL
     # x : densité d'arêtes interne
     # y : densité de paires interne (attendu)
@@ -381,7 +384,10 @@ def calculate_surprise(G, partition_dict):
 
     # Formule : m * KL(x || y)
     # KL(x||y) = x*log(x/y) + (1-x)*log((1-x)/(1-y))
-    surprise = m * (x * math.log(x / y) + (1 - x) * math.log((1 - x) / (1 - y)))
+    try:
+        surprise = m * (x * math.log(x / y) + (1 - x) * math.log((1 - x) / (1 - y)))
+    except (ValueError, ZeroDivisionError):
+        return 0
     
     return surprise
 
