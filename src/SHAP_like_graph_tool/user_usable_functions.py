@@ -559,6 +559,8 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_20 = ["spatial_louvain_manualiter_0_20_density"]
+    features_commu_inferee_spatial_based_manual_iter_0_50 = ["spatial_louvain_manualiter_0_50_density"]
     features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
     features_commu_inferee_spatial_based_manual_iter_0_90 = ["spatial_louvain_manualiter_0_90_density"]
     features_commu_inferee_spatial_based_manual_reg = ["spatial_louvain_manualreg_density"]
@@ -569,6 +571,8 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
+        "Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
         "Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
         "Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
         #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
@@ -578,6 +582,8 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
         "GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
         "GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90
     }
@@ -587,14 +593,17 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
     
     G_names_list = [
         "Airports",
-        "urban_streets_savannah",
-        "urban_streets_seoul",
-        "urban_streets_washington",
-        "facebook_organizations_S1",
-        "facebook_organizations_S2",
-        "fullerene_structures_C1500"
+        "eu_airlines",
+        "faa_routes",
+        #"urban_streets_savannah",
+        #"urban_streets_seoul",
+        #"urban_streets_washington",
+        #"facebook_organizations_S1",
+        #"facebook_organizations_S2",
+        #"fullerene_structures_C1500"
     ]
-    tasks = [G_name for G_name in G_names_list]
+
+    tasks = [f"{name}_{i}" for i in range(4) for name in G_names_list]
 
     cores_to_use = max(1, os.cpu_count() -2)
 

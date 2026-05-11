@@ -76,7 +76,7 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-   
+    """
     execution_stats = []
     for nbiter in range(1,31) : 
         for sbm_ratio in np.arange(0.00, 1.10, 0.10):
@@ -130,66 +130,73 @@ if __name__ == "__main__":
     print(f"{duration} secs")
 
     
-    
-    """
-    G_names_list = [
-        "Airports",
-        "fullerene_structures_C1500",
+    "fullerene_structures_C1500",
         "urban_streets_savannah",
         "urban_streets_seoul",
         "urban_streets_washington",
         "facebook_organizations_S1",
         "facebook_organizations_S2",
+    
+    """
+    
+    
+    G_names_list = [
+        "Airports",
+        "eu_airlines",
+        "faa_routes"
     ]
 
-
-    for G_name in G_names_list : 
-        print("######################################")
-        print(f"#### graph {G_name} :  ####")
-        print("######################################")
-        
-        path = f"graph_library/benchmark_graphes_reels/reel_spatial_{G_name}"
-        
-        try:
-            G = load_graphml_safe(f"{path}", startswith = True)
-            print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-        except Exception as e:
-            print(f"Erreur lors du chargement de {path} : {e}")
-
-        print(f"Validation 1er nœud : {list(G.nodes(data=True))[0]}")
-
-        
-        for n, data in G.nodes(data=True):
-            for attr in ['GT_pos']:
-                if attr in data and isinstance(data[attr], str):
-                    try:
-                        data[attr] = np.array(ast.literal_eval(data[attr]))
-                    except (ValueError, SyntaxError):
-                        continue
-        
-        if 'GroundTruth_JSON' in G.graph:
-            print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
-            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-            
-            GT = {
-                'GT_pos': np.array(gt_raw['GT_pos']),
-                 }
-        else:
-            print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
-            GT = None
-
-        if GT is not None and 'GT_pos' in GT:
-            for i, node_id in enumerate(G.nodes()):
-                G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
-
-        first_node = next(iter(G.nodes))
-        print(G.nodes[first_node])
-
-        start_time = time.time()
-        gp.compute_commus_greels(G, G_name, "GT_pos")            
-        end_time = time.time()
-        duration = end_time - start_time
-        
-
-    gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_05")
     """
+    for iteration in range (4):
+        for G_name in G_names_list : 
+            G_name_bis = f"{G_name}_{iteration}"
+            print("######################################")
+            print(f"#### graph {G_name_bis} :  ####")
+            print("######################################")
+
+            path = f"graph_library/benchmark_graphes_reels/reel_spatial_{G_name}"
+            
+            try:
+                G = load_graphml_safe(f"{path}", startswith = True)
+                print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+            except Exception as e:
+                print(f"Erreur lors du chargement de {path} : {e}")
+    
+            print(f"Validation 1er nœud : {list(G.nodes(data=True))[0]}")
+    
+            
+            for n, data in G.nodes(data=True):
+                for attr in ['GT_pos']:
+                    if attr in data and isinstance(data[attr], str):
+                        try:
+                            data[attr] = np.array(ast.literal_eval(data[attr]))
+                        except (ValueError, SyntaxError):
+                            continue
+            
+            if 'GroundTruth_JSON' in G.graph:
+                print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
+                gt_raw = json.loads(G.graph['GroundTruth_JSON'])
+                
+                GT = {
+                    'GT_pos': np.array(gt_raw['GT_pos']),
+                     }
+            else:
+                print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
+                GT = None
+    
+            if GT is not None and 'GT_pos' in GT:
+                for i, node_id in enumerate(G.nodes()):
+                    G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
+    
+            first_node = next(iter(G.nodes))
+            print(G.nodes[first_node])
+    
+            start_time = time.time()
+            gp.compute_commus_greels(G, G_name_bis, "GT_pos")            
+            end_time = time.time()
+            duration = end_time - start_time
+        """
+        
+
+    gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")
+   

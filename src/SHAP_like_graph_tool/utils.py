@@ -1,6 +1,7 @@
 from .MetaLouvain import *
 
 import random
+import math
 from re import X
 import numpy as np
 import pandas as pd
@@ -56,7 +57,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH
 EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_80", "spatial_louvain_manualiter_0_90"
+'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
     #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
@@ -342,6 +343,48 @@ def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
     
     return len(robust_commus) >= K_min
 
+def calculate_surprise(G, partition_dict):
+    """
+    Calcule la Surprise d'une partition. Plus le score est élevé, plus la partition est statistiquement significative.
+    """
+    n = G.number_of_nodes()
+    m = G.number_of_edges()
+    if m == 0: return 0
+
+    # 1. Nombre total de paires possibles dans le graphe (M)
+    M = n * (n - 1) / 2
+    
+    # 2. Calculer p (arêtes internes) et P (paires internes possibles)
+    p = 0
+    P = 0
+    
+    com_to_nodes = {}
+    for node, com in partition_dict.items():
+        com_to_nodes.setdefault(com, []).append(node)
+    
+    for nodes in com_to_nodes.values():
+        ni = len(nodes)
+        if ni < 2: continue
+        
+        # On extrait le sous-graphe pour compter les arêtes internes
+        sub = G.subgraph(nodes)
+        p += sub.number_of_edges()
+        
+        # Paires possibles dans cette communauté : ni * (ni-1) / 2
+        P += ni * (ni - 1) / 2
+
+    # 3. Calcul de la Surprise via l'approximation KL
+    # x : densité d'arêtes interne
+    # y : densité de paires interne (attendu)
+    x = p / m
+    y = P / M
+
+    # Formule : m * KL(x || y)
+    # KL(x||y) = x*log(x/y) + (1-x)*log((1-x)/(1-y))
+    surprise = m * (x * math.log(x / y) + (1 - x) * math.log((1 - x) / (1 - y)))
+    
+    return surprise
+
 
 def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolutions=None, **kwargs):
     """
@@ -354,8 +397,8 @@ def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolu
     sig = inspect.signature(partition_func)
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
     
-    best_modularity_backup = -1.0
-    best_modularity = -1.0
+    best_surprise_backup = -1.0
+    best_surprise = -1.0
     best_overall_partition = None
     best_overall_partition_backup = None
     best_res = -1.0
@@ -373,31 +416,26 @@ def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolu
             for i, community in enumerate(communities_raw):
                 for node in community:
                     partition_dict[node] = i
-        
-        com_groups = {}
-        for node, com in partition_dict.items():
-            com_groups.setdefault(com, set()).add(node)
-        comm_sets = list(com_groups.values())
 
-        if null_model is not None:
-            curr_mod = metamodularity(partition_dict, G, null_model)
-        else:
-            curr_mod = nx_comm.modularity(G, comm_sets)
+        num_commus = len(set(partition_dict.values()))
+        print(f"RES LOGS - ({num_commus} commus inférées pour res = {res:.2f})")
+
+        curr_surprise = calculate_surprise(G, partition_dict)
         
         if is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):            
-            if curr_mod > best_modularity:
-                best_modularity = curr_mod
+            if curr_surprise > best_surprise:
+                best_surprise = curr_surprise
                 best_overall_partition = partition_dict.copy()
                 best_res = res
         else : 
-            if curr_mod > best_modularity_backup:
-                best_modularity_backup = curr_mod
+            if curr_surprise > best_surprise_backup:
+                best_surprise_backup = curr_surprise
                 best_overall_partition_backup = partition_dict.copy()
                 best_res_backup = res
             
 
     if best_overall_partition is None : 
-        print(f"Attention : Critère K_min={K_min} non satisfait. Retour de la meilleure modularité ({best_modularity_backup:.3f})")
+        print(f"Attention : Critère K_min={K_min} non satisfait. Retour de la meilleure surprise ({best_surprise_backup:.3f})")
         best_overall_partition = best_overall_partition_backup
 
     print(f" Meilleure résolution : {best_res}")
@@ -543,6 +581,20 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "ManualIter":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "ManualIter_0_20":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+
+        degrees = np.array([d for n, d in G_train.degree(nodes)])
+        m2 = np.sum(degrees)
+        P_config = np.outer(degrees, degrees) / m2
+        P = (0.2 * P) + (0.8 * P_config)
+    elif NullModel_method == "ManualIter_0_50":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+
+        degrees = np.array([d for n, d in G_train.degree(nodes)])
+        m2 = np.sum(degrees)
+        P_config = np.outer(degrees, degrees) / m2
+        P = (0.5 * P) + (0.5 * P_config)
     elif NullModel_method == "ManualIter_0_80":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
 
@@ -550,13 +602,6 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         m2 = np.sum(degrees)
         P_config = np.outer(degrees, degrees) / m2
         P = (0.8 * P) + (0.2 * P_config)
-    elif NullModel_method == "ManualIter_0_90":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-
-        degrees = np.array([d for n, d in G_train.degree(nodes)])
-        m2 = np.sum(degrees)
-        P_config = np.outer(degrees, degrees) / m2
-        P = (0.9 * P) + (0.1 * P_config)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
     elif NullModel_method == "scgravity": 
@@ -616,11 +661,14 @@ def _appendSpatialLouvainCommunities_ManualReg(G_train, pos_attr="GT_pos"):
 def _appendSpatialLouvainCommunities_radiation(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_radiation_id" , NullModel_method = "Radiation")
 
+def _appendSpatialLouvainCommunities_ManualIter_0_20(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_20_id" , NullModel_method = "ManualIter_0_20")
+
+def _appendSpatialLouvainCommunities_ManualIter_0_50(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_50_id" , NullModel_method = "ManualIter_0_50")
+
 def _appendSpatialLouvainCommunities_ManualIter_0_80(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_80_id" , NullModel_method = "ManualIter_0_80")
-
-def _appendSpatialLouvainCommunities_ManualIter_0_90(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_90_id" , NullModel_method = "ManualIter_0_90")
 
 
 def _normalize_community_assignment(G, attr_name):
@@ -1211,8 +1259,9 @@ COMMUNITY_MAPPING = {
     "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
     #"spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation,
     "spatial_louvain_manualreg" : _appendSpatialLouvainCommunities_ManualReg,
-    "spatial_louvain_manualiter_0_80" : _appendSpatialLouvainCommunities_ManualIter_0_80,
-    "spatial_louvain_manualiter_0_90" : _appendSpatialLouvainCommunities_ManualIter_0_90
+    "spatial_louvain_manualiter_0_20" : _appendSpatialLouvainCommunities_ManualIter_0_20,
+    "spatial_louvain_manualiter_0_50" : _appendSpatialLouvainCommunities_ManualIter_0_50,
+    "spatial_louvain_manualiter_0_80" : _appendSpatialLouvainCommunities_ManualIter_0_80
 }
 
 

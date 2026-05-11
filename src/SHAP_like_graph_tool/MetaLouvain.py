@@ -232,7 +232,7 @@ def generate_dendrogram(graph,
     status.init(current_graph, weight, null_model,part_init)
     status_list = list()
 
-    print("----will do first level---")
+    #print("----will do first level---")
     __one_level(current_graph, status, weight, resolution, random_state, null_model)
 
     new_mod = __modularity(status, resolution)
@@ -247,7 +247,7 @@ def generate_dendrogram(graph,
     status.init(current_graph, weight,current_null_model)
 
     while True:
-        print("----will do new level---")
+        #print("----will do new level---")
 
         __one_level(current_graph, status, weight, resolution, random_state,current_null_model)
         new_mod = __modularity(status, resolution)
@@ -338,7 +338,7 @@ def __one_level(graph, status, weight_key, resolution, random_state,null_model):
     new_mod = cur_mod
 
     while modified and nb_pass_done != __PASS_MAX:
-        print("----- doing one pass over all nodes")
+        #print("----- doing one pass over all nodes")
         #print("modul",__modularity(status, resolution))
         cur_mod = new_mod
         modified = False
