@@ -39,7 +39,7 @@ from xgboost import XGBClassifier
 import optuna
 import time
 
-# nohup python -u main.py 2>&1 | grep --line-buffered -vE "it/s|%|\[.*\]" | grep --line-buffered "." > myoutfile &
+# nohup python -u main.py 2>&1 | grep --line-buffered -vE "it/s|%|\[.*\]|^----" | grep --line-buffered "." > myoutfile &
 # 
 
 def load_graphml_safe(path, startswith = False):
@@ -76,13 +76,13 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-    """
+   
     execution_stats = []
     for nbiter in range(1,31) : 
         for sbm_ratio in np.arange(0.00, 1.10, 0.10):
             
-            G_name = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
-            G_name_bis = f"artificial_graph_sbmv4_resAndNull_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name = f"artificial_graph_sbmv6_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv6_resAndNull_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
             #G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}_deepwalk".replace('.', '_')
             print("######################################")
             print(f"#### graph {G_name} :  ####")
@@ -121,7 +121,7 @@ if __name__ == "__main__":
 
     
     start_time = time.time()
-    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv4_resAndNull", nb_iterations=30, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv6_resAndNull", nb_iterations=30, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
     end_time = time.time()
     duration = end_time - start_time
     print("\n" + "="*50)
