@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.utils import negative_sampling
 from sklearn.metrics import roc_auc_score, average_precision_score
+import os 
+import copy
 
 
 ########################################
@@ -21,18 +23,23 @@ class GAE(nn.Module):
 
     def forward(self, x, edge_index):
         x = self.conv1(x, edge_index).relu()
-        return self.conv2(x, edge_index)
+        x = self.conv2(x, edge_index)
+        x = F.normalize(x, p=2, dim=1)
+        return x
 
     @torch.no_grad()
     def compute_link_loss(self, z, pos_edge_index, neg_edge_index):
-        """Calcule la BCE locale via produit scalaire pour diagnostic."""
+        """Calcule l'AUC locale via produit scalaire pour diagnostic."""
         pos_src, pos_dst = pos_edge_index
         neg_src, neg_dst = neg_edge_index
-        pos_logits = (z[pos_src] * z[pos_dst]).sum(dim=-1)
-        neg_logits = (z[neg_src] * z[neg_dst]).sum(dim=-1)
-        logits = torch.cat([pos_logits, neg_logits])
-        labels = torch.cat([torch.ones_like(pos_logits), torch.zeros_like(neg_logits)])
-        return F.binary_cross_entropy_with_logits(logits, labels).item()
+        pos_cos = (z[pos_src] * z[pos_dst]).sum(dim=-1)
+        neg_cos = (z[neg_src] * z[neg_dst]).sum(dim=-1)
+        y_true = torch.cat([torch.ones(pos_cos.size(0)), torch.zeros(neg_cos.size(0))]).cpu().numpy()
+        y_scores = torch.cat([pos_cos, neg_cos]).cpu().numpy()
+        auc = roc_auc_score(y_true, y_scores)
+        m_pos = pos_cos.mean().item()
+        m_neg = neg_cos.mean().item()
+        return auc, m_pos, m_neg
 
 
 class GeoEncoder(nn.Module):
@@ -56,18 +63,23 @@ class GeoEncoder(nn.Module):
         # encodage de Fourier : [sin(f*x), cos(f*x)]
         proj = pos @ self.frequencies
         x = torch.cat([torch.sin(proj), torch.cos(proj)], dim=-1)
-        return self.mlp(x)
+        x = self.mlp(x)
+        x = F.normalize(x, p=2, dim=1)
+        return x
 
     @torch.no_grad()
     def compute_link_loss(self, z, pos_edge_index, neg_edge_index):
-        """Calcule la BCE locale via produit scalaire pour diagnostic."""
+        """Calcule l'AUC locale via produit scalaire pour diagnostic."""
         pos_src, pos_dst = pos_edge_index
         neg_src, neg_dst = neg_edge_index
-        pos_logits = (z[pos_src] * z[pos_dst]).sum(dim=-1)
-        neg_logits = (z[neg_src] * z[neg_dst]).sum(dim=-1)
-        logits = torch.cat([pos_logits, neg_logits])
-        labels = torch.cat([torch.ones_like(pos_logits), torch.zeros_like(neg_logits)])
-        return F.binary_cross_entropy_with_logits(logits, labels).item()
+        pos_cos = (z[pos_src] * z[pos_dst]).sum(dim=-1)
+        neg_cos = (z[neg_src] * z[neg_dst]).sum(dim=-1)
+        y_true = torch.cat([torch.ones(pos_cos.size(0)), torch.zeros(neg_cos.size(0))]).cpu().numpy()
+        y_scores = torch.cat([pos_cos, neg_cos]).cpu().numpy()
+        auc = roc_auc_score(y_true, y_scores)
+        m_pos = pos_cos.mean().item()
+        m_neg = neg_cos.mean().item()
+        return auc, m_pos, m_neg
 
 
 class MLPLinkPredictor(nn.Module):
@@ -126,13 +138,25 @@ class JointLinkPredictionModel(nn.Module):
         
         return self.decoder(z_combined_u, z_combined_v)
     
-    def fit(self, data,  epochs=200, neg_sample_ratio=10, lr=0.01, lambda_ortho=1.0, disentangle=True):
+    def fit(self, data, val_data=None,  epochs=200, neg_sample_ratio=10, lr=0.01, lambda_ortho=1.0, disentangle=True, patience=20):
         """Entraîne simultanément encoder_a, encoder_b et le decoder MLP."""
         # On passe self.parameters() pour inclure A, B et le MLP du décodeur
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+        save_path = "../../outputs/models"
+        os.makedirs(save_path, exist_ok=True)
+        model_name = "joint_disentangled_20260513.pt" if disentangle else "joint_classic_20260513.pt"
+        full_path = os.path.join(save_path, model_name)
+
+        best_val_auc = 0.0
+        best_model_wts = copy.deepcopy(self.state_dict())
+        epochs_no_improve = 0
+
+        print(f"Démarrage de l'entraînement : {'DISENTANGLED' if disentangle else 'CLASSIC'}")
+        print(f"Modèle sauvegardé dans : {full_path}\n")
         
-        self.train()
         for epoch in range(epochs):
+            self.train()
             optimizer.zero_grad()
             
             neg_edge_index = negative_sampling(
@@ -166,19 +190,38 @@ class JointLinkPredictionModel(nn.Module):
             total_loss.backward()
             optimizer.step()
             
-            if epoch % 10 == 0:
+            speak_speed = 10
+            if epoch % speak_speed == 0:
+                self.eval()
                 z_a, z_b = self.encode(data)
-                loss_a = self.encoder_a.compute_link_loss(z_a, data.edge_index, neg_edge_index)
-                loss_b = self.encoder_b.compute_link_loss(z_b, data.edge_index, neg_edge_index)
+                auc_a,_,_ = self.encoder_a.compute_link_loss(z_a, data.edge_index, neg_edge_index)
+                auc_b,_,_ = self.encoder_b.compute_link_loss(z_b, data.edge_index, neg_edge_index)
                 mode = "DISENTANGLED" if disentangle else "CLASSIC"
-                print(f"[{mode}] Ep {epoch:03d} | Loss: {total_loss.item():.4f} | Rec: {loss_rec.item():.4f} | Lambda*Ortho: {lambda_ortho*loss_ortho.item():.4f}")
-                print(f"Détails modèles | A: {loss_a:.3f} | B: {loss_b:.3f}")
+                msg = f"[{mode}] Ep {epoch:03d} | Loss: {total_loss.item():.4f} | Rec: {loss_rec.item():.4f} | A: {auc_a:.3f} | B: {auc_b:.3f} | Lambda*Ortho: {lambda_ortho*loss_ortho.item():.4f}"
+
+                if val_data is not None:
+                    val_auc, val_ap = self.evaluate(val_data, neg_sample_ratio=50)
+                    msg += f" | VAL AUC: {val_auc:.4f}"
+                    
+                    if val_auc > best_val_auc:
+                        best_val_auc = val_auc
+                        best_model_wts = copy.deepcopy(self.state_dict())
+                        torch.save(self.state_dict(), full_path)
+                        epochs_no_improve = 0
+                        msg += " (★ Best)"
+                    else:
+                        epochs_no_improve += speak_speed
+                
+                print(msg)
+
+                if patience and epochs_no_improve >= patience:
+                    print(f"\nEarly stopping à l'époque {epoch}. Meilleur AUC Val: {best_val_auc:.4f}")
+                    break
 
 
     @torch.no_grad()
     def evaluate(self, test_data, neg_sample_ratio=10):
         """Évalue le modèle sur un set de test/validation."""
-
         self.eval()
         
         pos_out = self.forward(test_data, test_data.edge_index)
