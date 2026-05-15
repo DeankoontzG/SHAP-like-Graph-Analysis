@@ -117,7 +117,7 @@ if __name__ == "__main__":
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
-    """
+    
 
     
     start_time = time.time()
@@ -142,12 +142,11 @@ if __name__ == "__main__":
     
     G_names_list = [
         "Airports",
-        "eu_airlines",
-        "faa_routes"
+        #"eu_airlines",
+        #"faa_routes"
     ]
-
     
-    for iteration in range (4):
+    for iteration in range (0,4):
         for G_name in G_names_list : 
             G_name_bis = f"{G_name}_{iteration}"
             print("######################################")
@@ -190,14 +189,68 @@ if __name__ == "__main__":
     
             first_node = next(iter(G.nodes))
             print(G.nodes[first_node])
+
+            dataset_train = gp.load_dataset(filename=f"dataset_train_{G_name_bis}")
+            dataset_hidden = gp.load_dataset(filename=f"dataset_hidden_{G_name_bis}")
+
+            exclude = ['u', 'v', 'target', 'label', 'cn', 'aa', 'ra', 'jc', 'pa', 'sp',
+                      'louvain_density', 'spatial_louvain_density', 'spatial_louvain_manualiter_0_20_density', 'spatial_louvain_manualiter_0_50_density', 'spatial_louvain_manualiter_0_80_density']
+            features = [col for col in dataset_train.columns if (col not in exclude)]
+            print(f"FEATURES pour XGBOOST : {features}")
+            best_params = {
+                'n_estimators': 1000, # On met beaucoup
+                'learning_rate': 0.05,
+                'max_depth': 5,
+                'min_child_weight': 5,
+                'subsample': 0.8,
+                'colsample_bytree': 0.8,
+                'reg_alpha': 0.1,
+                'reg_lambda': 1.0,
+                'tree_method': 'hist',
+                'n_jobs': -1,
+                'random_state': 42
+            }
+            
+            results_test, model, X_train, y_train, X_test, y_test = gp.train_and_test_xgboost(dataset_train, features=features, parameters=best_params)
+            
+            X_hidden = dataset_hidden[features] if features else dataset_hidden.drop(["target", "u", "v", "label"], axis=1)
+            y_hidden = dataset_hidden['target']
+            
+            results_hidden = gp.get_performance_metrics(model, X_hidden, y_hidden, "Hidden_")
+            results_test_hidden = pd.concat([results_test, results_hidden], axis=1)
+        
+            data_to_save = {
+                "results": results_test_hidden,
+                "model": model,
+                "X_test": X_test,
+                "X_train": X_train,
+                "y_test": y_test,
+                "y_train": y_train,
+                "X_hidden": X_hidden,
+                "y_hidden": y_hidden,
+                "best_params": best_params
+            }
     
+            print("[PREP] Sauvegarde des données XGBoost (model, X/y Test et Hidden)")
+            gp.loadsave_data_joblib(data=data_to_save, filename=f"xgboost_data_{G_name_bis}.joblib", mode="save")
+        
+            print("\n RÉSULTATS")
+            print(results_test_hidden.to_string(index=False))
+    
+            print("\n [SHAP] Shapley va ! Lu.")
+    
+            shap_explanation = gp.analyze_with_shap_tree(model, X_hidden, y_hidden)
+            print("Sauvegarde de l'analyse SHAP")
+            gp.loadsave_data_joblib(data=shap_explanation, filename=f"shap_explainer_{G_name_bis}.joblib", mode="save")
+
+            """
             start_time = time.time()
             gp.compute_commus_greels(G, G_name_bis, "GT_pos")            
             end_time = time.time()
             duration = end_time - start_time
-        
+            """
         
 
-    gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")
-    """
+    #gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")
+    
    

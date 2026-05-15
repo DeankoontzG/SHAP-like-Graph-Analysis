@@ -250,7 +250,10 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
             if feat_name == 'GT_pos':
                 pos_u = data[indices_u]
                 pos_v = data[indices_v]
-                df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
+                #df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
+                eucl = np.linalg.norm(pos_u - pos_v, axis=1)
+                R = np.linalg.norm(pos_u[0])
+                df['GT_pos_dist'] = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
                 
                 deg_spatial = GroundTruth.get('GT_degrees_spatial')
                 if deg_spatial is not None :
@@ -1083,7 +1086,12 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     
     # Matrice de distance (N, N)
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    #dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    R = np.linalg.norm(pos_array[0]) 
+    dist_matrix = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
+    print(f"DIST calculée bieng pour Airports, R = {R}")
+   
     
     # Initialisation des paramètres
     alphas = np.zeros(n)
