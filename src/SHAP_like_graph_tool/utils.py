@@ -1,5 +1,5 @@
 from .MetaLouvain import *
-from SiNEcustom import *
+from .SiNEcustom import *
 
 import random
 import math
@@ -55,7 +55,8 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['SiNE_custom', 'SiNE_custom_spatial'] 
+EMBEDDINGS = [#'SiNEcustom', 
+              'SiNEcustom_spatial', 'deepwalk'] 
 #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
@@ -1464,7 +1465,7 @@ def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", Nul
         print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
         print(f"Écart maximal ponctuel : {max_diff:.2e}")
 
-    elif NullModel_method is None:
+    elif NullModel_method == "None":
         nodes = list(G_train.nodes())
         R_matrix = A
 
@@ -1472,9 +1473,11 @@ def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", Nul
 
     embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
 
-    for i, emb_vector in enumerate(embedding_matrix):
-        node_id = mapping[i]
-        G_train.nodes[node_id][attr_name] = emb_vector.tolist()
+    embeddings_dict = {}
+    for i, node_id in enumerate(nodes):
+        embeddings_dict[node_id] = embedding_matrix[i]
+
+    nx.set_node_attributes(G_train, embeddings_dict, attr_name)
 
     end_skip = time.time()
     SiNEcustom_duration = end_skip - start_skip
@@ -1488,8 +1491,8 @@ EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
     'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
-    'SiNE_custom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method=None, temperature=0.5),
-    'SiNE_custom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManuelIter", temperature=0.5)
+    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
+    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5)
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):

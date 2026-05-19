@@ -74,6 +74,14 @@ def generate_pairwise_samples(R, num_samples_per_node=15, temperature=0.5):
             probs = np.zeros(N)
             probs[valid_indices] = sub_probs
             pool_to_sample = N
+
+        probs_sum = probs.sum()
+        if probs_sum > 0:
+            normalization_ratio = 1/probs_sum
+            probs = probs*normalization_ratio
+            if abs(1-normalization_ratio)>1.05:
+                print(f"ATTTENTION :SiNE probas normalisées par un facteur de {normalisation_ratio}")
+            
         
        # TIRAGE : Le nombre maximum de tirages possibles sans remise est limité par notre pool de candidats réels
         available_candidates = len(valid_indices) if len(valid_indices) > 0 else (N - 1)

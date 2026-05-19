@@ -1,4 +1,5 @@
 from .MetaLouvain import *
+from .SiNEcustom import *
 
 import random
 import math
@@ -54,10 +55,12 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = [] #['n2v_homophily', 'deepwalk', 'crosswalk']
+EMBEDDINGS = [#'SiNEcustom', 
+              'SiNEcustom_spatial', 'deepwalk'] 
+#['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
+#'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
     #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
@@ -1444,11 +1447,52 @@ def _append_crosswalk_features(G_train, p, q, attr_name, dimensions=64):
     embeddings = nx.get_node_attributes(G_weighted, attr_name)
     nx.set_node_attributes(G_train, embeddings, attr_name)
 
+def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", NullModel_method = "ManualIter", temperature=0.5):
+    print(f"Calcul de SiNE custom (NullModel type ={NullModel_method})...")
+    start_skip = time.time()
+
+    A = nx.to_numpy_array(G_train)
+    
+    if NullModel_method == "ManualIter":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+        P_symetric = (P + P.T) / 2
+        R_matrix = A - P_symetric
+
+        asymmetry_sum = np.sum(np.abs(P - P_symetric))
+        max_diff = np.max(np.abs(P - P_symetric))
+
+        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial pour SiNEcustom ---")
+        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+        print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    elif NullModel_method == "None":
+        nodes = list(G_train.nodes())
+        R_matrix = A
+
+    mapping = {node: i for i, node in enumerate(nodes)}
+
+    embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
+
+    embeddings_dict = {}
+    for i, node_id in enumerate(nodes):
+        embeddings_dict[node_id] = embedding_matrix[i]
+
+    nx.set_node_attributes(G_train, embeddings_dict, attr_name)
+
+    end_skip = time.time()
+    SiNEcustom_duration = end_skip - start_skip
+    print(f"SiNEcustom terminé en {SiNEcustom_duration:.2f}s")
+    print(f"-> Succès : {embedding_matrix.shape[1]} dimensions ajoutées à l'attribut '{attr_name}' de chaque nœud.")
+    
+    return G_train
+
     
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
-    'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk")
+    'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
+    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
+    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5)
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):
