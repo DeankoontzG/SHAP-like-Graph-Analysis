@@ -1472,7 +1472,7 @@ def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", Nul
     mapping = {node: i for i, node in enumerate(nodes)}
 
     embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
-
+    
     embeddings_dict = {}
     for i, node_id in enumerate(nodes):
         embeddings_dict[node_id] = embedding_matrix[i]
@@ -1491,8 +1491,8 @@ EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
     'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
-    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
-    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5)
+    'SiNE_custom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
+    'SiNE_custom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5)
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):

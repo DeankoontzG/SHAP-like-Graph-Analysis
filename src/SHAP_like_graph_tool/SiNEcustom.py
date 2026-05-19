@@ -3,6 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
+########################################
+#### METHODE SiNE CUSTOM AC PAIRES #####
+########################################
+
 class PairwiseSignLoss(nn.Module):
     def __init__(self, margin=2.0):
         super().__init__()
@@ -130,5 +135,126 @@ def train_custom_signed_embedding(R_matrix, embedding_dim=64, epochs=100, lr=0.0
         
         if epoch % 10 == 0:
             print(f"Epoch {epoch:03d} | Loss: {loss.item():.4f}")
+            
+    return node_embeddings.detach().numpy()
+
+##############################################
+##### METHODE SiNE ORIGINALE AC TRIPLETS #####
+##############################################
+
+
+class OriginalSiNETripletLoss(nn.Module):
+    def __init__(self, margin=1.0):
+        super().__init__()
+        self.margin = margin
+
+    def forward(self, z, triplets):
+        """
+        z : Embeddings des noeuds (N, embedding_dim)
+        triplets : Tenseur (M, 3) des triplets (ancre_i, ami_j, ennemi_k)
+        """
+        if triplets.shape[0] == 0:
+            return torch.tensor(0.0, requires_grad=True, device=z.device)
+            
+        anchors = z[triplets[:, 0]]
+        friends = z[triplets[:, 1]]
+        enemies = z[triplets[:, 2]]
+
+        # Calcul des distances euclidiennes (norme L2) conforme à SiNE
+        dist_to_friend = torch.norm(anchors - friends, p=2, dim=1)
+        dist_to_enemy = torch.norm(anchors - enemies, p=2, dim=1)
+
+        # Objective function native : max(0, dist(i,j) - dist(i,k) + margin)
+        loss = torch.clamp(dist_to_friend - dist_to_enemy + self.margin, min=0.0)
+
+        return loss.mean()
+
+def generate_sine_triplets(R, num_triplets_per_node=15, temperature=0.5):
+    """
+    Génère les triplets (Ancre, Voisin_Positif, Voisin_Négatif) originaux du modèle SiNE.
+    """
+    triplets = []
+    N = R.shape[0]
+    
+    for i in range(N):
+        row = R[i]
+        
+        # 1. Extraction séparée des candidats Positifs et Négatifs
+        pos_mask = (row >= 0)
+        neg_mask = (row < 0)
+        
+        # On interdit le self-loop
+        pos_mask[i] = False
+        neg_mask[i] = False
+        
+        pos_indices = np.where(pos_mask)[0]
+        neg_indices = np.where(neg_mask)[0]
+        
+        # 2. GESTION DES NOEUDS ISOLÉS / ASYMÉTRIQUES
+        # SiNE requiert impérativement au moins un positif ET un négatif pour créer un triplet.
+        # Si l'une des deux populations manque, on bascule sur un repli probabiliste uniforme.
+        if len(pos_indices) == 0 or len(neg_indices) == 0:
+            # On génère un pool de repli uniforme (tous les noeuds sauf i)
+            uniform_pool = np.delete(np.arange(N), i)
+            eff_samples = min(num_triplets_per_node, len(uniform_pool) // 2)
+            
+            if eff_samples == 0:
+                continue
+                
+            # On sépare arbitrairement le tirage uniforme pour simuler des partenaires
+            sampled_nodes = np.random.choice(uniform_pool, size=eff_samples * 2, replace=False)
+            for idx in range(eff_samples):
+                triplets.append([i, sampled_nodes[idx], sampled_nodes[idx + eff_samples]])
+            continue
+
+        # 3. ÉCHANTILLONNAGE PAR SOFTMAX SÉPARÉ (Respect des intensités)
+        # Échantillonnage des Amis (Plus le résidu est grand/positif, plus on le pioche)
+        pos_scores = torch.tensor(row[pos_indices], dtype=torch.float32)
+        pos_probs = F.softmax(pos_scores / temperature, dim=0).numpy().astype(np.float64)
+        pos_probs /= pos_probs.sum()  # Sécurité flottants
+        
+        # Échantillonnage des Ennemis (Plus le résidu est négatif, donc plus sa valeur absolue est grande, plus on le pioche)
+        neg_scores = torch.tensor(-row[neg_indices], dtype=torch.float32)  # -row pour inverser le signe négatif
+        neg_probs = F.softmax(neg_scores / temperature, dim=0).numpy().astype(np.float64)
+        neg_probs /= neg_probs.sum()  # Sécurité flottants
+
+        # 4. TIRAGE SANS REMISE POUNDÉRÉ
+        eff_pos_samples = min(num_triplets_per_node, len(pos_indices))
+        eff_neg_samples = min(num_triplets_per_node, len(neg_indices))
+        eff_triplets = min(eff_pos_samples, eff_neg_samples)
+        
+        sampled_friends = np.random.choice(pos_indices, size=eff_triplets, p=pos_probs, replace=False)
+        sampled_enemies = np.random.choice(neg_indices, size=eff_triplets, p=neg_probs, replace=False)
+        
+        # 5. ASSEMBLEMENT DES TRIPLETS SINE
+        for f, e in zip(sampled_friends, sampled_enemies):
+            triplets.append([i, f, e])
+            
+    return torch.tensor(triplets, dtype=torch.long)
+
+def train_original_sine_embedding(R_matrix, embedding_dim=64, epochs=100, lr=0.01, temperature=0.5):
+    N = R_matrix.shape[0]
+    
+    # Initialisation uniforme des embeddings libres
+    node_embeddings = torch.nn.Parameter(torch.randn(N, embedding_dim) * 0.1)
+    
+    optimizer = torch.optim.Adam([node_embeddings], lr=lr)
+    loss_fn = OriginalSiNETripletLoss(margin=1.0)  # La marge d'origine de SiNE est souvent fixée à 1.0
+    
+    for epoch in range(epochs):
+        # 1. Échantillonnage stochastique par Triplet
+        triplets = generate_sine_triplets(R_matrix, num_triplets_per_node=15, temperature=temperature)
+        
+        optimizer.zero_grad()
+        
+        # 2. Calcul du coût de structure triplet
+        loss = loss_fn(node_embeddings, triplets)
+        
+        # 3. Optimisation
+        loss.backward()
+        optimizer.step()
+        
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch:03d} | Original SiNE Loss: {loss.item():.4f}")
             
     return node_embeddings.detach().numpy()
