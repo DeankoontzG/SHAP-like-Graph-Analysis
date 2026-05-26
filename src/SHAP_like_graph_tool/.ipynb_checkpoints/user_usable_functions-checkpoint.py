@@ -373,6 +373,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_old = ["spatial_louvain_old_density"]
+    features_commu_inferee_spatial_based_manual_iter_bined = ["spatial_louvain_bined_density"]
     features_commu_inferee_spatial_based_manual_iter_0_20 = ["spatial_louvain_manualiter_0_20_density"]
     features_commu_inferee_spatial_based_manual_iter_0_50 = ["spatial_louvain_manualiter_0_50_density"]
     features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
@@ -383,24 +385,32 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     features_deepwalk = ["deepwalk_dist"]
     features_SiNEcustom = ["SiNEcustom_dist"]
     features_SiNEcustom_spatial = ["SiNEcustom_spatial_dist"]
+    features_SiNEcustom_spatial_bined = ["SiNEcustom_spatial_bined_dist"]
+    features_SiNE = ["SiNE_dist"]
+    features_SiNE_spatial = ["SiNE_spatial_dist"]
+    features_SiNE_spatial_bined = ["SiNE_spatial_bined_dist"]
 
     experiments = {
-        #"Inferred_Commu_normal": features_commu_inferee_normal,
-        #"Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
-        #"Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
-        #"Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
-        #"Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
+        "Inferred_Commu_normal": features_commu_inferee_normal,
+        "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+         "Inferred_Commu_spatial_manuel_iter_old": features_commu_inferee_spatial_based_manual_iter_old,
+        "Inferred_Commu_spatial_manuel_iter_bined":features_commu_inferee_spatial_based_manual_iter_bined,
+        "Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
+        "Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
+        "Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
         #"Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
         #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
         #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
         #"GT_proba": features_GT_proba,
         "GT_pos": features_GT_pos,
-       # "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
-        #"GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
+        "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
+        "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter old": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_old,
+        "GT_pos + Inferred_Commu spatial manuel iter bined": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_bined,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
+        "GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
         #"GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,
         #"GT_pos + Inferred_Commu spatial manuel reg": features_GT_pos + features_commu_inferee_spatial_based_manual_reg,
        # "GT_pos + Inferred_Commu spatial scgravity": features_GT_pos + features_commu_inferee_spatial_based_scgravity,
@@ -411,11 +421,19 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
         #"Deepwalk + Inferred_Commu spatial manuel reg": features_deepwalk + features_commu_inferee_spatial_based_manual_reg,
         #"Deepwalk + Inferred_Commu spatial scgravity": features_deepwalk + features_commu_inferee_spatial_based_scgravity,
         #"Deepwalk + Inferred_Commu spatial wrdb": features_deepwalk + features_commu_inferee_spatial_based_wrdb,
-        "SiNEcustom": features_SiNEcustom,
+        #"SiNEcustom": features_SiNEcustom,
         "SiNEcustom_spatial": features_SiNEcustom_spatial,
+        "SiNEcustom_spatial_bined": features_SiNEcustom_spatial_bined,
+        #"SiNE": features_SiNE,
+        "SiNE_spatial": features_SiNE_spatial,
+        "SiNE_spatial_bined": features_SiNE_spatial_bined,
         "deepwalk": features_deepwalk,
-        "GT_pos + SiNEcustom": features_GT_pos + features_SiNEcustom,
+        #"GT_pos + SiNEcustom": features_GT_pos + features_SiNEcustom,
         "GT_pos + SiNEcustom_spatial": features_GT_pos + features_SiNEcustom_spatial,
+        "GT_pos + SiNEcustom_spatial_bined": features_GT_pos + features_SiNEcustom_spatial_bined,
+        #"GT_pos + SiNE": features_GT_pos + features_SiNE,
+        "GT_pos + SiNE_spatial": features_GT_pos + features_SiNE_spatial,
+        "GT_pos + SiNE_spatial_bined": features_GT_pos + features_SiNE_spatial_bined,
         "GT_pos + deepwalk": features_GT_pos + features_deepwalk,
     }
 
@@ -577,6 +595,7 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_old = ["spatial_louvain_old_density"]
     features_commu_inferee_spatial_based_manual_iter_0_20 = ["spatial_louvain_manualiter_0_20_density"]
     features_commu_inferee_spatial_based_manual_iter_0_50 = ["spatial_louvain_manualiter_0_50_density"]
     features_commu_inferee_spatial_based_manual_iter_0_80 = ["spatial_louvain_manualiter_0_80_density"]
@@ -590,6 +609,7 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
     experiments = {
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
+        "Inferred_Commu_spatial_manuel_iter_old": features_commu_inferee_spatial_based_manual_iter_old,
         #"Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
         #"Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
         #"Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
@@ -601,21 +621,20 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
+        "GT_pos + Inferred_Commu spatial manuel iter old": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_old,
         #"GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
         #"GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
         #"GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,
-        
-        
+        #"GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,        
     }
-    
+
 
     all_results = []
     
     G_names_list = [
-        "Airports",
-        "eu_airlines",
-        "faa_routes",
+        "Airports_test",
+        #"eu_airlines",
+        #"faa_routes",
         #"urban_streets_savannah",
         #"urban_streets_seoul",
         #"urban_streets_washington",
@@ -624,7 +643,7 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
         #"fullerene_structures_C1500"
     ]
 
-    tasks = [f"{name}_{i}" for i in range(4) for name in G_names_list]
+    tasks = [f"{name}_{i}" for i in range(1) for name in G_names_list]
 
     cores_to_use = max(1, os.cpu_count() -2)
 

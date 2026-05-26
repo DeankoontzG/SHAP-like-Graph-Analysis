@@ -56,12 +56,17 @@ CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
 EMBEDDINGS = [#'SiNEcustom', 
-              'SiNEcustom_spatial', 'deepwalk',
-              'SiNE','SiNE_spatial'] 
+              'SiNEcustom_spatial', 'SiNEcustom_spatial_bined',  'deepwalk',
+              #'SiNE',
+             'SiNE_spatial','SiNE_spatial_bined', 
+]
 #['n2v_homophily', 'deepwalk', 'crosswalk']
 COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-#'louvain', "spatial_louvain", "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
+'louvain',  
+    "spatial_louvain", 'spatial_louvain_bined', 
+    'spatial_louvain_old',
+     "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
     #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
@@ -350,47 +355,71 @@ def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
     
     return len(robust_commus) >= K_min
 
-def calculate_surprise(G, partition_dict):
+def calculate_surprise(G, partition_dict, null_model=None):
     """
-    Calcule la Surprise d'une partition. Plus le score est élevé, plus la partition est statistiquement significative.
+    Calcule la Surprise d'une partition, adaptée au modèle nul si fourni.
     """
     n = G.number_of_nodes()
     m = G.number_of_edges()
     if m == 0: return 0
 
-    # 1. Nombre total de paires possibles dans le graphe (M)
-    M = n * (n - 1) / 2
-    
-    # 2. Calculer p (arêtes internes) et P (paires internes possibles)
-    p = 0
-    P = 0
-    
+    # 1. Inversion du dictionnaire pour grouper par communauté
     com_to_nodes = {}
     for node, com in partition_dict.items():
         com_to_nodes.setdefault(com, []).append(node)
     
-    for nodes in com_to_nodes.values():
-        ni = len(nodes)
-        if ni < 2: continue
+    p = 0  # Nombre d'arêtes internes réelles
+    
+    if null_model is not None:
+        # --- CAS MODÈLE NUL SPATIAL ---
+        expected_internal_edges = 0.0
         
-        # On extrait le sous-graphe pour compter les arêtes internes
-        sub = G.subgraph(nodes)
-        p += sub.number_of_edges()
+        for nodes in com_to_nodes.values():
+            ni = len(nodes)
+            if ni < 2: continue
+            
+            # Compte des arêtes réelles internes
+            sub = G.subgraph(nodes)
+            p += sub.number_of_edges()
+            
+            # Somme des probabilités du modèle nul pour toutes les paires internes
+            # On fait une double boucle simple pour éviter les doublons (u < v)
+            nodes_list = list(nodes)
+            for i in range(ni):
+                for j in range(i + 1, ni):
+                    u = nodes_list[i]
+                    v = nodes_list[j]
+                    # On interroge ton modèle nul matriciel
+                    expected_internal_edges += null_model(u, v)
         
-        # Paires possibles dans cette communauté : ni * (ni-1) / 2
-        P += ni * (ni - 1) / 2
+        # x : densité d'arêtes internes observée
+        # y : densité d'arêtes internes attendue par le modèle gravitaire
+        x = p / m
+        y = expected_internal_edges / m
+        
+    else:
+        # --- CAS CLASSIQUE (UNIFORME) ---
+        M = n * (n - 1) / 2
+        P = 0
+        for nodes in com_to_nodes.values():
+            ni = len(nodes)
+            if ni < 2: continue
+            sub = G.subgraph(nodes)
+            p += sub.number_of_edges()
+            P += ni * (ni - 1) / 2
+            
+        if P <= 0 or P >= M: return 0
+        x = p / m
+        y = P / M
 
-    if P <= 0 or P >= M:
+    # 3. Calcul de la Surprise via la divergence KL (commune aux deux méthodes)
+    # Sécurité pour les bornes de la divergence KL
+    if x <= 0 or x >= 1 or y <= 0 or y >= 1:
+        # Si on observe moins ou autant que le modèle nul, la surprise est nulle 
+        # (on ne cherche à valoriser que la surfraction de liens internes)
+        if x <= y: return 0
         return 0
 
-    # 3. Calcul de la Surprise via l'approximation KL
-    # x : densité d'arêtes interne
-    # y : densité de paires interne (attendu)
-    x = p / m
-    y = P / M
-
-    # Formule : m * KL(x || y)
-    # KL(x||y) = x*log(x/y) + (1-x)*log((1-x)/(1-y))
     try:
         surprise = m * (x * math.log(x / y) + (1 - x) * math.log((1 - x) / (1 - y)))
     except (ValueError, ZeroDivisionError):
@@ -401,30 +430,41 @@ def calculate_surprise(G, partition_dict):
 
 def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolutions=None, **kwargs):
     """
-    Explore les résolutions et s'arrête dès que la condition K_min est remplie.
+    Explore les résolutions de manière bidirectionnelle à partir du pivot physique 1.0.
+    S'arrête dès qu'une partition robuste (K_min) est trouvée.
     """
-    if resolutions is None:
-        resolutions = [0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 3.0, 5.0]
-
     null_model = kwargs.get('null_model', None)
     sig = inspect.signature(partition_func)
     filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
     
-    best_surprise_backup = -1.0
-    best_surprise = -1.0
+    if null_model is not None and 'null_model' not in filtered_kwargs:
+        filtered_kwargs['null_model'] = null_model
+
+    # Génération d'une séquence de résolutions alternée à partir de 1.0 : 
+    #[1.0, 1.2, 0.83, 1.44, 0.69, 1.73, 0.58, 2.07, 0.48]
+    if resolutions is None:
+        resolutions = [1.0]
+        res_up = 1.0
+        res_down = 1.0
+        for _ in range(5):
+            res_up *= 1.2
+            res_down /= 1.2
+            resolutions.append(round(res_up, 2))
+            resolutions.append(round(res_down, 2))
+
     best_overall_partition = None
-    best_overall_partition_backup = None
-    best_res = -1.0
-    best_res_backup = -1.0 
+    best_res = 1.0
     
     for res in resolutions:
+        # Sécurité : Louvain n'accepte pas les résolutions négatives ou nulles
+        if res <= 0:
+            continue
+            
         communities_raw = partition_func(G, resolution=res, **filtered_kwargs)
         
-        # 2. UNIFICATION DU FORMAT -> On veut un dictionnaire {node: com_id}
         if isinstance(communities_raw, dict):
-            partition_dict = communities_raw
+            partition_dict = communities_raw.copy()
         else:
-            # Si c'est une liste de sets (cas de nx.louvain_communities)
             partition_dict = {}
             for i, community in enumerate(communities_raw):
                 for node in community:
@@ -432,27 +472,21 @@ def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolu
 
         num_commus = len(set(partition_dict.values()))
         print(f"RES LOGS - ({num_commus} commus inférées pour res = {res:.2f})")
-
-        curr_surprise = calculate_surprise(G, partition_dict)
         
-        if is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):            
-            if curr_surprise > best_surprise:
-                best_surprise = curr_surprise
-                best_overall_partition = partition_dict.copy()
-                best_res = res
-        else : 
-            if curr_surprise > best_surprise_backup:
-                best_surprise_backup = curr_surprise
-                best_overall_partition_backup = partition_dict.copy()
-                best_res_backup = res
-            
+        # Sauvegarde par défaut (sur le premier élément de la liste, donc 1.0)
+        if best_overall_partition is None:
+            best_overall_partition = partition_dict.copy()
+            best_res = res
 
-    if best_overall_partition is None : 
-        print(f"Attention : Critère K_min={K_min} non satisfait. Retour de la meilleure surprise ({best_surprise_backup:.3f})")
-        best_overall_partition = best_overall_partition_backup
+        # Dès qu'une résolution (qu'elle soit plus haute ou plus basse) offre une partition robuste, on valide
+        if is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):
+            best_overall_partition = partition_dict.copy()
+            best_res = res
+            print(f" Structure robuste trouvée à res = {best_res:.2f}")
+            return best_overall_partition
 
-    print(f" Meilleure résolution : {best_res}")
-    
+    print(f"Attention : Aucun niveau de résolution n'a satisfait K_min={K_min}.")
+    print(f"Retour de la partition par défaut (res = {best_res:.2f})")
     return best_overall_partition
     
 
@@ -594,6 +628,8 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
     elif NullModel_method == "ManualIter":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "ManualIter_Bined":
+        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr, speak=False)
     elif NullModel_method == "ManualIter_0_20":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
 
@@ -656,6 +692,52 @@ def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "sp
     
     return G_train
 
+def _appendSpatialLouvainCommunities_old(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_old_id", NullModel_method = "ManualIter"):
+    if NullModel_method == "Manual" : 
+        P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
+    elif NullModel_method == "ManualIter":
+        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
+    elif NullModel_method == "WithReelDegreesBiais":
+        P, nodes = get_gravity_null_model(G_train, pos_attr)
+    else : 
+        P, nodes = optimize_scgravity_model(G_train, pos_attr)
+    A = nx.to_numpy_array(G_train)
+    P_symetric = (P + P.T) / 2
+
+    asymmetry_sum = np.sum(np.abs(P - P_symetric))
+    max_diff = np.max(np.abs(P - P_symetric))
+
+    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
+    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+    print(f"Écart maximal ponctuel : {max_diff:.2e}")
+
+    mapping = {node: i for i, node in enumerate(nodes)}
+
+    def my_matrix_null_model(u, v):
+        idx_u = mapping[u]
+        idx_v = mapping[v]
+        return P_symetric[idx_u, idx_v]
+
+    # Appel de l'algorithme développé dans MetaLouvain.py
+    current_res = 1.0
+    partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
+    
+    attempts = 0
+    # Tant que la partition n'est pas robuste, on augmente la résolution
+    while not is_partition_robust(G_train, partition, K_min=3, min_edge_ratio=0.01) and attempts < 12:
+        current_res *= 1.2
+        partition = best_partition(G_train, resolution=current_res, null_model=my_matrix_null_model)
+        attempts += 1
+    
+    print("--- Diagnostic de l'objet partition ---")
+    print(f"Nombre de nœuds assignés : {len(partition)}")
+    print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
+    print("---------------------------------------")
+
+    nx.set_node_attributes(G_train, partition, attr_name)
+    
+    return G_train
+
 def _appendSpatialLeidenCommunities_scgravity(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLeidenCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_leiden_scgravity_id" ,NullModel_method = "scgravity")
 
@@ -682,6 +764,9 @@ def _appendSpatialLouvainCommunities_ManualIter_0_50(G_train, pos_attr="GT_pos")
 
 def _appendSpatialLouvainCommunities_ManualIter_0_80(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_80_id" , NullModel_method = "ManualIter_0_80")
+
+def _appendSpatialLouvainCommunities_Bined(G_train, pos_attr="GT_pos"):
+    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_bined_id" , NullModel_method = "ManualIter_Bined")
 
 
 def _normalize_community_assignment(G, attr_name):
@@ -1091,12 +1176,13 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     # Matrice de distance (N, N)
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
     #dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    
     eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
     R = np.linalg.norm(pos_array[0]) 
     dist_matrix = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
     print(f"DIST calculée bieng pour Airports, R = {R}")
-   
     
+   
     # Initialisation des paramètres
     alphas = np.zeros(n)
     beta = 1.0
@@ -1262,6 +1348,124 @@ def get_radiation_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=100
    
     return final_P, nodes
 
+
+def get_gravity_bined_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak=False):
+    """
+    Inférence d'un Null Model spatial non-paramétrique sans SciPy.
+    Utilise un double Newton-Raphson vectoriel croisé (Alphas et Gammas).
+    """
+    nodes = list(G.nodes())
+    n = len(nodes)
+    adj = nx.to_numpy_array(G, nodelist=nodes)
+    degrees = np.sum(adj, axis=1)
+    
+    # 1. Distances
+    pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+
+    num_pairs = n * (n - 1) // 2
+    K = int(np.clip(num_pairs // 2000, 10, 50))
+    
+    if speak:
+        print(f"--- Initialisation du modèle spatial non-paramétrique (Newton-Loop) ---")
+        print(f"Nœuds : {n}, Bins calculés (K) : {K}")
+
+    # 2. Bins
+    iu_indices = np.triu_indices(n, k=1)
+    flat_distances = dist_matrix[iu_indices]
+    flat_edges = adj[iu_indices]
+    
+    quantiles = np.linspace(0, 100, K + 1)
+    bin_edges = np.percentile(flat_distances, quantiles)
+    bin_edges[-1] = np.inf 
+    bin_edges[0] = 0.0
+    
+    flat_bin_assignments = np.digitize(flat_distances, bin_edges[:-1]) - 1
+    flat_bin_assignments = np.clip(flat_bin_assignments, 0, K - 1)
+    
+    observed_links_per_bin = np.bincount(flat_bin_assignments, weights=flat_edges, minlength=K)
+
+    # 3. Initialisation des paramètres
+    alphas = np.zeros(n)
+    gammas = np.zeros(K) # Friction initiale nulle
+    gamma_matrix = np.zeros((n, n))
+    old_mae_bins = 999.0
+
+    # 5. BOUCLE PRINCIPALE
+    for iteration in range(max_iter):
+        
+        # --- ÉTAPE A : RECONSTRUCTION DE LA MATRICE DES GAMMAS ---
+        flat_gamma = gammas[flat_bin_assignments]
+        gamma_matrix[iu_indices] = flat_gamma
+        gamma_matrix[(iu_indices[1], iu_indices[0])] = flat_gamma
+        
+        # --- ÉTAPE B : NEWTON-RAPHSON SUR LES ALPHAS (5 itérations) ---
+        for _ in range(5):
+            theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - gamma_matrix
+            theta = np.clip(theta, -50, 50)
+            
+            P = 1.0 / (1.0 + np.exp(-theta))
+            np.fill_diagonal(P, 0)
+            
+            f_x = np.sum(P, axis=1) - degrees
+            f_prime = np.sum(P * (1.0 - P), axis=1) + 1e-6
+            
+            alphas -= 0.5 * np.clip(f_x / f_prime, -2.0, 2.0)
+            
+        # --- ÉTAPE C : NEWTON-RAPHSON SUR LES GAMMAS (Mise à jour directe) ---
+        # On extrait les probabilités du triangle supérieur pour calculer l'état des bins
+        probs_flat = P[iu_indices]
+        predicted_links_per_bin = np.bincount(flat_bin_assignments, weights=probs_flat, minlength=K)
+        
+        # Gradient et Hessienne analytiques pour chaque bin
+        grad_gamma = predicted_links_per_bin - observed_links_per_bin
+        hess_gamma = np.bincount(flat_bin_assignments, weights=probs_flat * (1.0 - probs_flat), minlength=K) + 1e-6
+        
+        # Pas de Newton bridé pour éviter les sauts aberrants
+        gamma_step = grad_gamma / hess_gamma
+        gammas += 0.5 * np.clip(gamma_step, -2.0, 2.0)
+        
+        # Contrainte d'ancrage : le bin 0 reste fixé à 0, et pas de valeurs négatives de friction
+        gammas[0] = 0.0
+        gammas = np.clip(gammas, 0.0, 40.0)
+        
+        # --- ÉTAPE D : MESURE DE LA CONVERGENCE GLOBALE ---
+        predicted_degrees = np.sum(P, axis=1)
+        mae_degrees = np.mean(np.abs(predicted_degrees - degrees))
+        mae_bins = np.mean(np.abs(predicted_links_per_bin - observed_links_per_bin))
+        
+        if speak and iteration % 10 == 0:
+            print(f"Iter {iteration:3d} | MAE Degrés = {mae_degrees:.6f} | MAE Bins = {mae_bins:.4f} | Max Gamma = {gammas.max():.2f}")
+            
+        # On ne converge QUE si les deux critères (degrés ET bins) sont validés de concert
+        if mae_degrees < tol and mae_bins < 1.0 and iteration > 5:
+            if speak: print(f"-> Convergence simultanée atteinte à l'itération {iteration} !")
+            break
+
+        if np.abs(old_mae_bins - mae_bins) < 1e-5 and iteration > 5:
+            if speak: print(f"-> Arrêt prématuré : stagnation du modèle atteinte à l'itération {iteration} (Plateau mathématique).")
+            break
+
+        old_mae_bins = mae_bins
+
+    # Reconstruction finale de sécurité
+    flat_gamma = gammas[flat_bin_assignments]
+    gamma_matrix[iu_indices] = flat_gamma
+    gamma_matrix[(iu_indices[1], iu_indices[0])] = flat_gamma
+    
+    theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - gamma_matrix
+    current_P = 1.0 / (1.0 + np.exp(-np.clip(theta, -50, 50)))
+    np.fill_diagonal(current_P, 0)
+
+    print("\n--- Diagnostic final bined spatial commu ---")
+    final_probs_flat = current_P[iu_indices]
+    print(f"MAE des degrés final : {np.mean(np.abs(np.sum(current_P, axis=1) - degrees)):.6f}")
+    print(f"Écart absolu moyen des liens par bin : {np.mean(np.abs(np.bincount(flat_bin_assignments, weights=final_probs_flat, minlength=K) - observed_links_per_bin)):.4f}")
+    print(f"Gammas finaux : {np.round(gammas, 2)}")
+
+    return current_P, nodes
+    
+
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
     'infomap': _appendInfomapCommunities,
@@ -1271,6 +1475,8 @@ COMMUNITY_MAPPING = {
     'significance': _appendSignificanceCommunities,
     "spatial_leiden" : _appendSpatialLeidenCommunities,
     "spatial_louvain" : _appendSpatialLouvainCommunities,
+    "spatial_louvain_old" : _appendSpatialLouvainCommunities_old,
+    "spatial_louvain_bined" : _appendSpatialLouvainCommunities_Bined,
     "spatial_leiden_scgravity" : _appendSpatialLeidenCommunities_scgravity,
     "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
@@ -1465,6 +1671,17 @@ def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", Nul
         print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial pour SiNEcustom ---")
         print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
         print(f"Écart maximal ponctuel : {max_diff:.2e}")
+    elif NullModel_method == "ManualIter_Bined":
+        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr)
+        P_symetric = (P + P.T) / 2
+        R_matrix = A - P_symetric
+
+        asymmetry_sum = np.sum(np.abs(P - P_symetric))
+        max_diff = np.max(np.abs(P - P_symetric))
+
+        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial Bined pour SiNEcustom ---")
+        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+        print(f"Écart maximal ponctuel : {max_diff:.2e}")
 
     elif NullModel_method == "None":
         nodes = list(G_train.nodes())
@@ -1502,7 +1719,17 @@ def _append_SiNE(G_train, pos_attr="GT_pos", attr_name = "SiNE", NullModel_metho
         print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial pour SiNEcustom ---")
         print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
         print(f"Écart maximal ponctuel : {max_diff:.2e}")
+    elif NullModel_method == "ManualIter_Bined":
+        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr)
+        P_symetric = (P + P.T) / 2
+        R_matrix = A - P_symetric
 
+        asymmetry_sum = np.sum(np.abs(P - P_symetric))
+        max_diff = np.max(np.abs(P - P_symetric))
+
+        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial Bined pour SiNEcustom ---")
+        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
+        print(f"Écart maximal ponctuel : {max_diff:.2e}")
     elif NullModel_method == "None":
         nodes = list(G_train.nodes())
         R_matrix = A
@@ -1527,10 +1754,12 @@ EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
     'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
-    'SiNE_custom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
-    'SiNE_custom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5),
-    'SiNE': lambda G: _append_SiNE(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
-    'SiNE_spatial' : lambda G: _append_SiNE(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5)
+    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
+    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5),
+    'SiNEcustom_spatial_bined' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
+    'SiNE': lambda G: _append_SiNE(G, attr_name="SiNE", NullModel_method="None", temperature=0.5),
+    'SiNE_spatial' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial", NullModel_method="ManualIter", temperature=0.5),
+    'SiNE_spatial_bined' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):

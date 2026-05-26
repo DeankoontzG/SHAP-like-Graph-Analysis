@@ -75,14 +75,14 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 
 if __name__ == "__main__":
-
     
+
     execution_stats = []
-    for nbiter in range(1,11) : 
+    for nbiter in range(7,11) : 
         for sbm_ratio in np.arange(0.00, 1.10, 0.10):
             
-            G_name = f"artificial_graph_sbmv6_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
-            G_name_bis = f"artificial_graph_sbmv6_SiNEcustom_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name = f"artificial_graph_sbmv5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv5_comuAndEmb_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
             #G_name_bis = f"artificial_graph_sbmv4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}_deepwalk".replace('.', '_')
             print("######################################")
             print(f"#### graph {G_name} :  ####")
@@ -118,10 +118,9 @@ if __name__ == "__main__":
     print("="*50)
     print(df.to_string(index=False))
     
-
     
     start_time = time.time()
-    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv6_SiNEcustom", nb_iterations=10, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv5_comuAndEmb", nb_iterations=10, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
     end_time = time.time()
     duration = end_time - start_time
     print("\n" + "="*50)
@@ -130,7 +129,7 @@ if __name__ == "__main__":
     print(f"{duration} secs")
 
     
-    """
+   
     #"fullerene_structures_C1500",
     #"urban_streets_savannah",
     #"urban_streets_seoul",
@@ -140,16 +139,17 @@ if __name__ == "__main__":
     
     
     
-    
+    """
     G_names_list = [
         "Airports",
         #"eu_airlines",
         #"faa_routes"
     ]
+            
     
-    for iteration in range (0,4):
+    for iteration in range (0,1):
         for G_name in G_names_list : 
-            G_name_bis = f"{G_name}_{iteration}"
+            G_name_bis = f"{G_name}_test_{iteration}"
             print("######################################")
             print(f"#### graph {G_name_bis} :  ####")
             print("######################################")
@@ -191,11 +191,20 @@ if __name__ == "__main__":
             first_node = next(iter(G.nodes))
             print(G.nodes[first_node])
 
+            start_time = time.time()
+            gp.compute_commus_greels(G, G_name_bis, "GT_pos")      
+            end_time = time.time()
+            duration = end_time - start_time
+                
+            print(f"⏱️ Terminé en {duration:.2f} secondes.")
+
+
             dataset_train = gp.load_dataset(filename=f"dataset_train_{G_name_bis}")
             dataset_hidden = gp.load_dataset(filename=f"dataset_hidden_{G_name_bis}")
 
             exclude = ['u', 'v', 'target', 'label', 'cn', 'aa', 'ra', 'jc', 'pa', 'sp',
-                      'louvain_density', 'spatial_louvain_density', 'spatial_louvain_manualiter_0_20_density', 'spatial_louvain_manualiter_0_50_density', 'spatial_louvain_manualiter_0_80_density']
+                      #'louvain_density', 'spatial_louvain_density', 'spatial_louvain_manualiter_0_20_density', 'spatial_louvain_manualiter_0_50_density', 'spatial_louvain_manualiter_0_80_density'
+                      ]
             features = [col for col in dataset_train.columns if (col not in exclude)]
             print(f"FEATURES pour XGBOOST : {features}")
             best_params = {
@@ -252,4 +261,4 @@ if __name__ == "__main__":
             """
         
 
-    #gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")
+            #gp.analyze_commus_greels(G_name_short="G_reels", nb_iterations=0, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="2026_05_11")

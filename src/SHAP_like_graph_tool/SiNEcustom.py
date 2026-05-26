@@ -190,23 +190,10 @@ def generate_sine_triplets(R, num_triplets_per_node=15, temperature=0.5):
         pos_indices = np.where(pos_mask)[0]
         neg_indices = np.where(neg_mask)[0]
         
-        # 2. GESTION DES NOEUDS ISOLÉS / ASYMÉTRIQUES
-        # SiNE requiert impérativement au moins un positif ET un négatif pour créer un triplet.
-        # Si l'une des deux populations manque, on bascule sur un repli probabiliste uniforme.
-        if len(pos_indices) == 0 or len(neg_indices) == 0:
-            # On génère un pool de repli uniforme (tous les noeuds sauf i)
-            uniform_pool = np.delete(np.arange(N), i)
-            eff_samples = min(num_triplets_per_node, len(uniform_pool) // 2)
-            
-            if eff_samples == 0:
-                continue
-                
-            # On sépare arbitrairement le tirage uniforme pour simuler des partenaires
-            sampled_nodes = np.random.choice(uniform_pool, size=eff_samples * 2, replace=False)
-            for idx in range(eff_samples):
-                triplets.append([i, sampled_nodes[idx], sampled_nodes[idx + eff_samples]])
+        if len(pos_indices) == 0:
+            # Si pas de voisin + on passe au noeud suivant pour éviter d'injecter du bruit inutile
             continue
-
+        
         # 3. ÉCHANTILLONNAGE PAR SOFTMAX SÉPARÉ (Respect des intensités)
         # Échantillonnage des Amis (Plus le résidu est grand/positif, plus on le pioche)
         pos_scores = torch.tensor(row[pos_indices], dtype=torch.float32)
@@ -214,9 +201,15 @@ def generate_sine_triplets(R, num_triplets_per_node=15, temperature=0.5):
         pos_probs /= pos_probs.sum()  # Sécurité flottants
         
         # Échantillonnage des Ennemis (Plus le résidu est négatif, donc plus sa valeur absolue est grande, plus on le pioche)
-        neg_scores = torch.tensor(-row[neg_indices], dtype=torch.float32)  # -row pour inverser le signe négatif
+        if len(neg_indices) > 0 :
+            neg_scores = torch.tensor(-row[neg_indices], dtype=torch.float32)  # -row pour inverser le signe négatif
+        else : #On fait le softmax sur -R pour favoriser les probas les plus basses valeurs positives (les 0 par ex)
+            neg_scores = torch.tensor(-row[pos_indices], dtype=torch.float32)
+            neg_indices = pos_indices.copy()
+
         neg_probs = F.softmax(neg_scores / temperature, dim=0).numpy().astype(np.float64)
         neg_probs /= neg_probs.sum()  # Sécurité flottants
+
 
         # 4. TIRAGE SANS REMISE POUNDÉRÉ
         eff_pos_samples = min(num_triplets_per_node, len(pos_indices))
@@ -225,6 +218,9 @@ def generate_sine_triplets(R, num_triplets_per_node=15, temperature=0.5):
         
         sampled_friends = np.random.choice(pos_indices, size=eff_triplets, p=pos_probs, replace=False)
         sampled_enemies = np.random.choice(neg_indices, size=eff_triplets, p=neg_probs, replace=False)
+        for idx in range(eff_triplets):
+            while sampled_enemies[idx] == sampled_friends[idx]:
+                sampled_enemies[idx] = np.random.choice(neg_indices, size=1, p=neg_probs)[0]
         
         # 5. ASSEMBLEMENT DES TRIPLETS SINE
         for f, e in zip(sampled_friends, sampled_enemies):
