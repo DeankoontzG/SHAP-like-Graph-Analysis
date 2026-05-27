@@ -1,6 +1,6 @@
 from .MetaLouvain import *
 from .SiNEcustom import *
-from .models import train_and_test_xgboost
+from .models import train_and_test_xgboost, get_performance_metrics
 
 import random
 import math
@@ -2458,6 +2458,7 @@ def analyze_commus_metrics(G_name_short, nb_iterations, spatial_ref = "GT_pos", 
         "Topologiques":features_topologiques,
         "Communautés":features_commu_inferee,
         "Embeddings":features_embeddings,
+        "Toutes les features": features_topologiques + features_commu_inferee + features_embeddings
     }
 
     all_results = []
@@ -2501,21 +2502,23 @@ def run_single_experiment_metrics(nb_iter, i, spatial_ref, G_name_short, experim
     else :
         spatial_ref = f"_{spatial_ref}"
     G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+    G_name_long = f"{G_name_short}_AllBasicMetrics_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+    
     G = load_graphml_safe(f"graph_library/{G_name}.graphml") 
  
 
     if 'P_matrix_JSON' in G.graph:
         print("P_matrix trouvée.")
         GT = {
-            GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
+            'GT_proba': np.array(json.loads(G.graph['P_matrix_JSON']))
         }
-    else 
+    else :
         print(f"[WARNING] Aucune Pmatrix trouvée dans G.graph pour {G_name}")
         return None
 
 
     # 1. Chargement des données d'entraînement
-    _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)
+    _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name_long)
 
     for df in [dataset_train, dataset_eval]:    
         n1 = df['u'].astype(int).values

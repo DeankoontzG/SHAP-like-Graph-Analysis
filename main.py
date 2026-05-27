@@ -76,7 +76,14 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-    gp.computeShapValsGTforAllGraphs()
+    start_time = time.time()
+    all_results = gp.analyze_commus_metrics(G_name_short = "artificial_graph_sbmv_4", nb_iterations=10, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="20260527s")
+    end_time = time.time()
+    duration = end_time - start_time
+    print("\n" + "="*50)
+    print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
+    print("="*50)
+    print(f"{duration} secs")
 
     """
     execution_stats = []
