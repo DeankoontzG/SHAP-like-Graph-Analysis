@@ -1,0 +1,8 @@
+Graph,Nodes,Edges,Time_sec,Time_per_node,Time_per_link,Time_Node2vec_train
+reel_blumenau_drug,75,181,26.29,0.3505,0.1452,1
+reel_facebook_friends,362,1988,122.05,0.3372,0.0614,7
+reel_cintestinalis,205,2575,95.3,0.4649,0.037,4
+reel_faculty_hiring_computer_science,206,2741,95.05,0.4614,0.0347,4
+reel_jazz_collab,198,2742,95.17,0.4807,0.0347,4
+reel_wiki_science,687,6523,274.59,0.3997,0.0421,16
+reel_Airports,3363,13547,1297.43,0.3858,0.0958,73
