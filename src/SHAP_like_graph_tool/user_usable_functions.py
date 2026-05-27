@@ -366,6 +366,7 @@ def compute_commus(G, G_name, spatial_ref = "GT_pos", computeEmb=False):
     
 
 def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
+    """
     features_GT_proba = ['GT_proba']
     features_GT_pos = ['GT_pos_dist', 
                        #'GT_spatial_deg_product', 
@@ -435,6 +436,13 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
         "GT_pos + SiNE_spatial": features_GT_pos + features_SiNE_spatial,
         "GT_pos + SiNE_spatial_bined": features_GT_pos + features_SiNE_spatial_bined,
         "GT_pos + deepwalk": features_GT_pos + features_deepwalk,
+    }
+    """
+    features_GT_proba = ['GT_proba']
+
+    experiments = {
+        "GT_proba": features_GT_proba,
+        
     }
 
     all_results = []

@@ -1,8 +1,11 @@
 from .MetaLouvain import *
 from .SiNEcustom import *
+from .models import train_and_test_xgboost
 
 import random
 import math
+import html
+import io
 from re import X
 import numpy as np
 import pandas as pd
@@ -55,13 +58,16 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = [#'SiNEcustom', 
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
+"""
+[#'SiNEcustom', #'SiNE',
               'SiNEcustom_spatial', 'SiNEcustom_spatial_bined',  'deepwalk',
-              #'SiNE',
              'SiNE_spatial','SiNE_spatial_bined', 
 ]
-#['n2v_homophily', 'deepwalk', 'crosswalk']
-COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
+"""
+
+COMMUNITY_ALGOS = [ 'louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+"""
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
 'louvain',  
     "spatial_louvain", 'spatial_louvain_bined', 
@@ -70,7 +76,8 @@ COMMUNITY_ALGOS = [ #' 'infomap', 'sbm', 'leiden', 'surprise', 'significance',
     #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
 #"spatial_louvain_radiation"
 ]
-METRICS_NODE = [] #[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
+"""
+METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -259,10 +266,10 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
             if feat_name == 'GT_pos':
                 pos_u = data[indices_u]
                 pos_v = data[indices_v]
-                #df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
-                eucl = np.linalg.norm(pos_u - pos_v, axis=1)
-                R = np.linalg.norm(pos_u[0])
-                df['GT_pos_dist'] = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
+                df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
+                #eucl = np.linalg.norm(pos_u - pos_v, axis=1)
+                #R = np.linalg.norm(pos_u[0])
+                #df['GT_pos_dist'] = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
                 
                 deg_spatial = GroundTruth.get('GT_degrees_spatial')
                 if deg_spatial is not None :
@@ -2053,7 +2060,8 @@ def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1
     neg_indices = y_test[y_test == 0].index
     neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
     
-    X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    #X_shap = X_test.loc[pos_sample.union(neg_sample)]
+    X_shap = pd.concat([X_test.loc[pos_sample], X_test.loc[neg_sample]])
     
     print(f"Calcul TreeExplainer : {len(X_shap)} échantillons au total.")
 
@@ -2322,6 +2330,245 @@ def plot_dominance_distribution(explainability_dataset, title="Distribution de l
     
     plt.show()
 
+def process_single_graph(iteration, i, features):
+    sbm_val = f"{i:.2f}"
+    pos_val = f"{1-i:.2f}"
+    G_name_base = f"artificial_graph_sbmv_4_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{iteration}"
+    G_name_full = f"artificial_graph_sbmv_4_AllBasicMetrics_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{iteration}"
+    
+    try:
+        # 1. Chargement des données d'entraînement
+        G_train, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name_full)
+        G = load_graphml_safe(f"graph_library/{G_name_base}.graphml") 
+        
+        if 'GroundTruth_JSON' in G.graph:
+            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
+            GT = {
+                'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
+                'GT_pos': np.array(gt_raw['GT_pos']),
+                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
+            }
+        else:
+            print(f"[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph pour {G_name_base}")
+            return None
+
+        # 2. Injection des features
+        for df in [dataset_train, dataset_eval]:
+            if df is None:
+                continue
+            
+            n1 = df['u'].astype(int).values
+            n2 = df['v'].astype(int).values
+            
+            # Distance entre les nœuds (GT_pos_dist)
+            pos_n1 = GT['GT_pos'][n1]
+            pos_n2 = GT['GT_pos'][n2]
+            df['GT_pos_dist'] = np.sqrt(np.sum((pos_n1 - pos_n2) ** 2, axis=1))
+            
+            # Densité SBM (GT_sbm_density)
+            block_n1 = GT['GT_sbm_id'][n1]
+            block_n2 = GT['GT_sbm_id'][n2]
+            df['GT_sbm_density'] = GT['GT_sbm_matrix'][block_n1, block_n2]
+       
+        
+        target_col = 'target' 
+        X_eval, y_eval = dataset_eval[features], dataset_eval[target_col]
+        
+        # 4. Entraînement de XGBoost
+        _, model, _, _, _, _ = train_and_test_xgboost(dataset_train, features=features, plot=False)
+        
+        # 5. Analyse SHAP via TreeExplainer
+        shap_explanation = analyze_with_shap_tree(model, X_eval, y_eval)
+        
+        # 6. Extraction des valeurs absolues moyennes de SHAP
+        shap_df = pd.DataFrame(shap_explanation.values, columns=features)
+        
+        result_dict = {
+            'iteration': iteration,
+            'sbm_val': float(sbm_val)
+        }
+        
+        for feat in features:
+            result_dict[f"SHAP_{feat}"] = float(np.mean(np.abs(shap_df[feat])))
+        
+        return result_dict
+        
+    except Exception as e:
+        print(f"[ERROR] Échec sur le graphe {G_name_base} : {str(e)}")
+        return None
+        
+
+def computeShapValsGTforAllGraphs():
+
+    features_GT_proba = ['GT_proba']
+    features_GT_sbm = ['GT_sbm_density']
+    features_GT_pos = ['GT_pos_dist']
+    features_topologiques = ['pr_u', 'pr_v','ppr_u', 'ppr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v', 'katz_u', 'katz_v',
+                              'sp', 'jc', 'aa', 'cn','pa', 'ra']
+    features_commu_inferee = ['louvain_density', 'infomap_density', 'sbm_density','leiden_density',
+                          "surprise_density","significance_density", ]
+    features_embeddings = ["deepwalk_cos",  "deepwalk_dist","n2v_homophily_cos", "n2v_homophily_dist","crosswalk_cos", "crosswalk_dist"]
+    
+    experiments = {
+        #"GT_absolue (proba)": features_GT_proba,
+        #"GT_sbm": features_GT_sbm,
+        #"GT_pos": features_GT_pos,
+        "Topologiques":features_topologiques,
+        "Communautés":features_commu_inferee,
+        "Embeddings":features_embeddings,
+    }
+    
+    #features_list = features_GT_sbm + features_GT_pos
+    features_list = features_embeddings + features_commu_inferee + features_topologiques
+    
+    n_cores = max(1, os.cpu_count() - 2)
+    print(f"Lancement de la parallélisation sur {n_cores} cœurs...")
+
+    tasks = [
+        (iteration, i)
+        for iteration in range(1, 11)
+        for i in np.arange(1.00, -0.10, -0.10)
+    ]
+
+    # Exécution parallèle
+    results = Parallel(n_jobs=n_cores, backend="loky")(
+        delayed(process_single_graph)(iteration, i, features_list) for iteration, i in tasks
+    )
+
+    # Nettoyage des résultats (on retire les éventuels "None" dus à des erreurs dans les workers)
+    rows_results = [r for r in results if r is not None]
+
+    # 7. Création et sauvegarde de la matrice globale des résultats individuels
+    df_results = pd.DataFrame(rows_results)
+    df_results.to_csv("outputs/results/00_detailed_shap_results_sbmv4_AllBasicMetrics.csv", index=False)
+    print("\n--- Matrice des résultats détaillés sauvegardée sous '00_detailed_shap_results_sbmv4_AllBasicMetrics.csv' ---")
+    print(df_results)
+
+
+def analyze_commus_metrics(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
+    
+    features_GT_proba = ['GT_proba']
+    features_topologiques = ['pr_u', 'pr_v','ppr_u', 'ppr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v', 'katz_u', 'katz_v', 'sp', 'jc', 'aa', 'cn','pa', 'ra']
+    features_commu_inferee = ['louvain_density', 'infomap_density', 'sbm_density','leiden_density',
+                          "surprise_density","significance_density"]
+    features_embeddings = ["deepwalk_cos",  "deepwalk_dist","n2v_homophily_cos", "n2v_homophily_dist","crosswalk_cos", "crosswalk_dist"]
+    
+    experiments = {
+        "Max théorique (GT_proba)": features_GT_proba,
+        "Topologiques":features_topologiques,
+        "Communautés":features_commu_inferee,
+        "Embeddings":features_embeddings,
+    }
+
+    all_results = []
+
+    tasks = [
+        (nb_iter, i) 
+        for nb_iter in range(1, nb_iterations + 1) 
+        for i in np.linspace(i_max, i_min, nb_i)
+    ]
+
+    cores_to_use = max(1, os.cpu_count() -2)
+
+    print(f"Lancement de la parallélisation sur {cores_to_use} coeurs pour {len(tasks)} tâches...")
+
+    # Exécution parallèle
+    results_nested = Parallel(n_jobs=cores_to_use)(
+        delayed(run_single_experiment_metrics)(nb_iter, i, spatial_ref, G_name_short, experiments) 
+        for nb_iter, i in tasks
+    )
+
+    # Aplatir la liste de listes
+    all_results = [item for sublist in results_nested for item in sublist]
+
+    all_results = pd.DataFrame(all_results)
+    
+    output_dir = "outputs/results"
+    os.makedirs(output_dir, exist_ok=True)
+    output_path = os.path.join(output_dir, f"00_perfs_AllMetrics_{G_name_short}_{nb_iterations}iter_{name_export_results}.csv")
+    all_results.to_csv(output_path, index=False)
+    print(f" Succès ! Fichier sauvegardé dans : {output_path}")
+    return all_results
+
+def run_single_experiment_metrics(nb_iter, i, spatial_ref, G_name_short, experiments):
+    """
+    Fonction exécutée par un cœur unique pour une valeur de i et une itération donnée.
+    """
+    sbm_val = f"{i:.2f}"
+    pos_val = f"{1-i:.2f}"
+    if spatial_ref == "GT_Pos" or spatial_ref == "GT_pos" : 
+        spatial_ref = ""
+    else :
+        spatial_ref = f"_{spatial_ref}"
+    G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
+    G = load_graphml_safe(f"graph_library/{G_name}.graphml") 
+ 
+
+    if 'P_matrix_JSON' in G.graph:
+        print("P_matrix trouvée.")
+        GT = {
+            GT['GT_proba'] = np.array(json.loads(G.graph['P_matrix_JSON']))
+        }
+    else 
+        print(f"[WARNING] Aucune Pmatrix trouvée dans G.graph pour {G_name}")
+        return None
+
+
+    # 1. Chargement des données d'entraînement
+    _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name)
+
+    for df in [dataset_train, dataset_eval]:    
+        n1 = df['u'].astype(int).values
+        n2 = df['v'].astype(int).values
+        df['GT_proba'] = GT['GT_proba'][n1, n2]
+
+    local_results = []
+
+    for exp_name, feat_list in experiments.items():
+        missing = set(feat_list) - set(dataset_train.columns)
+        if missing:
+            print(f" Exp {exp_name} : colonnes manquantes {missing}. Skip.")
+            print(set(dataset_train.columns))
+            continue
+
+        print(f" Running: {exp_name} for SBM={i}")
+    
+        Params = {
+            'max_depth': 3,             # Faible profondeur pour éviter l'overfitting sur 2 variables
+            'learning_rate': 0.1,       # Compromis idéal vitesse/précision
+            'n_estimators': 1000,       # On met beaucoup, l'early stopping fera le reste
+            'subsample': 1.0,           # On garde 100% des lignes (plus stable pour peu de features)
+            'colsample_bytree': 1.0,    # On garde les 2 features à chaque split
+            'objective': 'binary:logistic', 
+            'tree_method': 'hist',      # Accélère l'entraînement sur de gros datasets
+            'reg_lambda': 1,            # Régularisation L2 pour stabiliser les poids
+            'n_jobs': 1                # Utilise 1 seul coeur, pour la parallélisation
+        }
+
+        stats_df, model, _, _, _, _ = train_and_test_xgboost(dataset_train, features=feat_list, parameters = Params, plot=False)
+
+        importances = model.feature_importances_
+        feat_imp_series = pd.Series(importances, index=feat_list).sort_values(ascending=False)
+            
+        # Évaluation sur le dataset de référence FIXE (Graphe SBM 1.0)
+        X_eval_fixed = dataset_eval[feat_list] 
+        stats_eval_df = get_performance_metrics(model, X_eval_fixed, dataset_eval["target"], "EXP_")
+        
+        local_results.append({
+            "G_name" : G_name,
+            "Ratio_SBM": i,
+            "Iter": nb_iter,
+            "Experiment": exp_name,
+            "AP_train": stats_df["Test_AP"].iloc[0],
+            "AUC-ROC_train": stats_df["Test_AUC-ROC"].iloc[0],
+            "AP_eval": stats_eval_df["EXP_AP"].iloc[0],
+            "AUC-ROC_eval": stats_eval_df["EXP_AUC-ROC"].iloc[0],
+            "Top_Feature": feat_imp_series.index[0], # On stocke la #1 pour analyse
+            "Top_Importance": feat_imp_series.iloc[0]
+        })
+
+    return local_results
+
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
@@ -2434,6 +2681,18 @@ class GraphEncoder(json.JSONEncoder):
         if isinstance(obj, set):
             return list(obj)
         return super().default(obj)
+
+def load_graphml_safe(path, speak=False):
+    with open(path, 'r', encoding='utf-8') as f:
+        raw_data = f.read()
+
+    clean_data = html.unescape(raw_data)
+    G = nx.read_graphml(io.StringIO(clean_data))
+
+    if speak : 
+        print(f"✅ Graphe chargé : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+    
+    return G
 
 def save_graph(G, filename):
     base_path = Path(PROJECT_ROOT) if 'PROJECT_ROOT' in globals() else Path.cwd()
