@@ -58,26 +58,27 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
-"""
-[#'SiNEcustom', #'SiNE',
-              'SiNEcustom_spatial', 'SiNEcustom_spatial_bined',  'deepwalk',
-             'SiNE_spatial','SiNE_spatial_bined', 
+EMBEDDINGS = [
+    #'SiNEcustom', #'SiNE',
+    'SiNEcustom_spatial', 'deepwalk'
+    #'SiNEcustom_spatial_bined', 
+    #'SiNE_spatial','SiNE_spatial_bined', 
 ]
-"""
+#['n2v_homophily', 'deepwalk', 'crosswalk']
 
-COMMUNITY_ALGOS = [ 'louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
-"""
+
+COMMUNITY_ALGOS = [
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-'louvain',  
-    "spatial_louvain", 'spatial_louvain_bined', 
-    'spatial_louvain_old',
-     "spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
-    #"spatial_louvain_manualreg", "spatial_louvain_scgravity","spatial_louvain_wrdb",
-#"spatial_louvain_radiation"
-]
-"""
-METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
+    'louvain',  
+    "spatial_louvain", 
+    #'spatial_louvain_bined', 'spatial_louvain_old',
+    #"spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
+    ]
+
+#[ 'louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+
+METRICS_NODE = []
+#[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -2408,6 +2409,7 @@ def computeShapValsGTforAllGraphs():
     features_commu_inferee = ['louvain_density', 'infomap_density', 'sbm_density','leiden_density',
                           "surprise_density","significance_density", ]
     features_embeddings = ["deepwalk_cos",  "deepwalk_dist","n2v_homophily_cos", "n2v_homophily_dist","crosswalk_cos", "crosswalk_dist"]
+    
     
     experiments = {
         #"GT_absolue (proba)": features_GT_proba,

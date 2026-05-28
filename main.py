@@ -76,22 +76,92 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-    start_time = time.time()
-    all_results = gp.analyze_commus_metrics(G_name_short = "artificial_graph_sbmv_4", nb_iterations=10, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="20260527s")
-    end_time = time.time()
-    duration = end_time - start_time
-    print("\n" + "="*50)
-    print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
-    print("="*50)
-    print(f"{duration} secs")
-
-    """
     execution_stats = []
-    for nbiter in range(2,11) : 
+    for nbiter in range(1,31) : 
         for sbm_ratio in np.arange(0.00, 1.10, 0.10):
             
             G_name = f"artificial_graph_sbmv_4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
-            G_name_bis = f"artificial_graph_sbmv_4_AllBasicMetrics_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv_4_comuAndEmb_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            print("######################################")
+            print(f"#### graph {G_name} :  ####")
+            print("######################################")
+            
+            path = f"graph_library/{G_name}.graphml"
+            
+            try:
+                G = load_graphml_safe(path)
+                print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+            except Exception as e:
+                print(f"Erreur lors du chargement de {path} : {e}")
+            
+            start_time = time.time()
+            gp.compute_commus(G, G_name_bis, "GT_pos", computeEmb=True)      
+            end_time = time.time()
+            duration = end_time - start_time
+    
+            execution_stats.append({
+                    "Graph": G_name,
+                    "Nodes": G.number_of_nodes(),
+                    "Edges": G.number_of_edges(),
+                    "Time_sec": round(duration, 2),
+                    "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
+                    "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
+                })
+                
+            print(f"⏱️ Terminé en {duration:.2f} secondes.")
+
+    df = pd.DataFrame(execution_stats)
+    print("\n" + "="*50)
+    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("="*50)
+    print(df.to_string(index=False))
+
+    execution_stats = []
+    for nbiter in range(1,31) : 
+        for sbm_ratio in np.arange(0.00, 1.10, 0.10):
+            
+            G_name = f"artificial_graph_sbmv_6_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv_6_comuAndEmb_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            print("######################################")
+            print(f"#### graph {G_name} :  ####")
+            print("######################################")
+            
+            path = f"graph_library/{G_name}.graphml"
+            
+            try:
+                G = load_graphml_safe(path)
+                print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
+            except Exception as e:
+                print(f"Erreur lors du chargement de {path} : {e}")
+            
+            start_time = time.time()
+            gp.compute_commus(G, G_name_bis, "GT_pos", computeEmb=True)      
+            end_time = time.time()
+            duration = end_time - start_time
+    
+            execution_stats.append({
+                    "Graph": G_name,
+                    "Nodes": G.number_of_nodes(),
+                    "Edges": G.number_of_edges(),
+                    "Time_sec": round(duration, 2),
+                    "Time_per_node": round(duration / G.number_of_nodes(), 4) if G.number_of_nodes() > 0 else 0,
+                    "Time_per_link": round(duration / G.number_of_edges(), 4) if G.number_of_edges() > 0 else 0
+                })
+                
+            print(f"⏱️ Terminé en {duration:.2f} secondes.")
+
+    df = pd.DataFrame(execution_stats)
+    print("\n" + "="*50)
+    print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
+    print("="*50)
+    print(df.to_string(index=False))
+
+    execution_stats = []
+    for nbiter in range(1,31) : 
+        for sbm_ratio in np.arange(0.00, 1.10, 0.10):
+            
+            G_name = f"artificial_graph_sbmv_5_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv_5_comuAndEmb_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
             print("######################################")
             print(f"#### graph {G_name} :  ####")
             print("######################################")
@@ -127,15 +197,32 @@ if __name__ == "__main__":
     print(df.to_string(index=False))
     
     start_time = time.time()
-    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv_6_comuAndEmb", nb_iterations=10, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv_4_comuAndEmb", nb_iterations=30, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
     end_time = time.time()
     duration = end_time - start_time
     print("\n" + "="*50)
     print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
     print("="*50)
     print(f"{duration} secs")
-    """
 
+    start_time = time.time()
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv_6_comuAndEmb", nb_iterations=30, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    end_time = time.time()
+    duration = end_time - start_time
+    print("\n" + "="*50)
+    print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
+    print("="*50)
+    print(f"{duration} secs")
+
+    start_time = time.time()
+    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv_5_comuAndEmb", nb_iterations=30, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    end_time = time.time()
+    duration = end_time - start_time
+    print("\n" + "="*50)
+    print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
+    print("="*50)
+    print(f"{duration} secs")
+   
     
    
     #"fullerene_structures_C1500",
