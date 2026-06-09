@@ -13,16 +13,21 @@ def execute(G, G_name, add_P_matrix = False, steps= ["prep", "shap"]):
         validate_input_graph(G)
         print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
 
+        
         if 'GroundTruth_JSON' in G.graph:
             print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
             gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-            
-            GT = {'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
-                'GT_pos': np.array(gt_raw['GT_pos']),
-                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
-                'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']),
-                'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial'])
-                 }
+
+            GT = {
+                'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']) if 'GT_sbm_matrix' in gt_raw else None,
+                'GT_pos': np.array(gt_raw['GT_pos']) if 'GT_pos' in gt_raw else None,
+                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']) if 'GT_sbm_id' in gt_raw else None,
+                'GT_degrees_sbm': np.array(gt_raw['GT_degrees_sbm']) if 'GT_degrees_sbm' in gt_raw else None,
+                'GT_degrees_spatial': np.array(gt_raw['GT_degrees_spatial']) if 'GT_degrees_spatial' in gt_raw else None
+            }
+
+            cles_trouvees = [cle for cle, valeur in GT.items() if valeur is not None]
+            print(f"Colonnes de GT trouvées: {cles_trouvees}")
             
             if 'P_matrix_JSON' in G.graph:
                 print("P_matrix trouvée.")
@@ -531,7 +536,7 @@ def run_single_experiment(nb_iter, i, spatial_ref, G_name_short, experiments):
 
         return local_results
 
-def compute_commus_greels(G, G_name, spatial_ref = "GT_pos"):
+def compute_commus_greels(G, G_name, spatial_ref = "GT_pos", computeEmb=False):
 
     validate_input_graph(G)
     print("[PREP] Validation du Graphe terminée. Lancement des calculs...")
@@ -566,7 +571,7 @@ def compute_commus_greels(G, G_name, spatial_ref = "GT_pos"):
     G_kept, G_hidden = hide_graph_links(G, test_size=0.10)
     G_train, G_test = hide_graph_links(G_kept, test_size=0.15)
 
-    if spatial_ref == "deepwalk": 
+    if spatial_ref == "deepwalk" or computeEmb : 
         G_train = computeDistanceFeatures(G_train)
         G_kept = computeDistanceFeatures(G_kept)
         
@@ -588,7 +593,7 @@ def compute_commus_greels(G, G_name, spatial_ref = "GT_pos"):
     save_dataset(dataset=dataset_hidden, filename=f"dataset_hidden_{G_name}")
     
 
-def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
+def analyze_commus_greels(G_name_short, G_names_list, nb_iterations, spatial_ref = "GT_pos", name_export_results="DATE"):
     features_GT_proba = ['GT_proba']
     features_GT_pos = ['GT_pos_dist', 
                        #'GT_spatial_deg_product', 
@@ -596,6 +601,7 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
                     ]
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
+    features_commu_inferee_spatial_based_manual_iter_bined = ["spatial_louvain_bined_density"]
     features_commu_inferee_spatial_based_manual_iter_old = ["spatial_louvain_old_density"]
     features_commu_inferee_spatial_based_manual_iter_0_20 = ["spatial_louvain_manualiter_0_20_density"]
     features_commu_inferee_spatial_based_manual_iter_0_50 = ["spatial_louvain_manualiter_0_50_density"]
@@ -605,46 +611,29 @@ def analyze_commus_greels(G_name_short, nb_iterations, spatial_ref = "GT_pos", i
     features_commu_inferee_spatial_based_scgravity = ["spatial_louvain_scgravity_density"]
     features_commu_inferee_spatial_based_wrdb = ["spatial_louvain_wrdb_density"]
     features_deepwalk = ["deepwalk_dist"]
+    features_SiNEcustom_spatial = ["SiNEcustom_spatial_dist"]
+    features_SiNEcustom_spatial_bined = ["SiNEcustom_spatial_bined_dist"]
 
 
     experiments = {
+        "GT_pos": features_GT_pos,
         "Inferred_Commu_normal": features_commu_inferee_normal,
         "Inferred_Commu_spatial_manuel_iter": features_commu_inferee_spatial_based_manual_iter,
-        "Inferred_Commu_spatial_manuel_iter_old": features_commu_inferee_spatial_based_manual_iter_old,
-        #"Inferred_Commu_spatial_manuel_iter_0_20": features_commu_inferee_spatial_based_manual_iter_0_20,
-        #"Inferred_Commu_spatial_manuel_iter_0_50": features_commu_inferee_spatial_based_manual_iter_0_50,
-        #"Inferred_Commu_spatial_manuel_iter_0_80": features_commu_inferee_spatial_based_manual_iter_0_80,
-        #"Inferred_Commu_spatial_manuel_iter_0_90": features_commu_inferee_spatial_based_manual_iter_0_90,
-        #"Inferred_Commu_spatial_manuel_reg": features_commu_inferee_spatial_based_manual_reg,
-        #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
-        #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
-        #"GT_proba": features_GT_proba,
-        "GT_pos": features_GT_pos,
+        "Inferred_Commu_spatial_manuel_iter_bined": features_commu_inferee_spatial_based_manual_iter_bined,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
-        "GT_pos + Inferred_Commu spatial manuel iter old": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_old,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_20": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_20,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_50": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_50,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_80": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_80,
-        #"GT_pos + Inferred_Commu spatial manuel iter 0_90": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_0_90,        
+        "GT_pos + Inferred_Commu spatial manuel iter bined": features_GT_pos + features_commu_inferee_spatial_based_manual_iter_bined,
+        "SiNEcustom_spatial": features_SiNEcustom_spatial,
+        "SiNEcustom_spatial_bined": features_SiNEcustom_spatial_bined,
+        "deepwalk": features_deepwalk,
+        "GT_pos + SiNEcustom_spatial": features_GT_pos + features_SiNEcustom_spatial,
+        "GT_pos + SiNEcustom_spatial_bined": features_GT_pos + features_SiNEcustom_spatial_bined,
+        "GT_pos + deepwalk": features_GT_pos + features_deepwalk,
     }
 
 
     all_results = []
-    
-    G_names_list = [
-        "Airports_test",
-        #"eu_airlines",
-        #"faa_routes",
-        #"urban_streets_savannah",
-        #"urban_streets_seoul",
-        #"urban_streets_washington",
-        #"facebook_organizations_S1",
-        #"facebook_organizations_S2",
-        #"fullerene_structures_C1500"
-    ]
-
-    tasks = [f"{name}_{i}" for i in range(1) for name in G_names_list]
+    tasks = [f"{name}_{i}" for i in range(nb_iterations) for name in G_names_list]
 
     cores_to_use = max(1, os.cpu_count() -2)
 

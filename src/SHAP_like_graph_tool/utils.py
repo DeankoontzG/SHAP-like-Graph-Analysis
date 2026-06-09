@@ -58,27 +58,30 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = [
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
+"""
+[
     #'SiNEcustom', #'SiNE',
-    'SiNEcustom_spatial', 'deepwalk'
-    #'SiNEcustom_spatial_bined', 
+    'SiNEcustom_spatial', 'deepwalk',
+    'SiNEcustom_spatial_bined', 
     #'SiNE_spatial','SiNE_spatial_bined', 
 ]
-#['n2v_homophily', 'deepwalk', 'crosswalk']
+"""
 
-
-COMMUNITY_ALGOS = [
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+"""
+[
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-    'louvain',  
-    "spatial_louvain", 
-    #'spatial_louvain_bined', 'spatial_louvain_old',
+    'louvain',"spatial_louvain", 
+    'spatial_louvain_bined',
+    #'spatial_louvain_old',
     #"spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
     ]
+"""
 
-#[ 'louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 
-METRICS_NODE = []
-#[ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
+METRICS_NODE = ["degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
+#[]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -263,6 +266,9 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
         indices_v = df['v'].map(mapping).values.astype(int)
         
         for feat_name, data in GroundTruth.items():
+            if data is None:
+                continue
+                
             # Cas spécifiques (nominatifs) 
             if feat_name == 'GT_pos':
                 pos_u = data[indices_u]
@@ -1183,12 +1189,12 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     
     # Matrice de distance (N, N)
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    #dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
     
-    eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
-    R = np.linalg.norm(pos_array[0]) 
-    dist_matrix = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
-    print(f"DIST calculée bieng pour Airports, R = {R}")
+    #eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    #R = np.linalg.norm(pos_array[0]) 
+    #dist_matrix = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
+    #print(f"DIST calculée bieng pour Airports, R = {R}")
     
    
     # Initialisation des paramètres
