@@ -1,0 +1,70 @@
+\documentclass[runningheads]{llncs}
+
+\begin{document}
+
+\title{Explicabilité additive et décorrélation structurelle dans les graphes complexes}
+\titlerunning{Explicabilité et décorrélation dans les graphes}
+
+\author{Guilhem DUPUY \\Encadré par Rémy CAZABET}
+\authorrunning{G. DUPUY}
+
+\institute{Université Claude Bernard Lyon 1, France}
+%
+\maketitle              % typeset the header of the contribution
+
+% --- Début du bloc résumé ---
+\addvspace{1.5em}
+\begin{quotation}
+\begin{small}
+\noindent \textbf{Résumé.} La prédiction de liens dans les réseaux complexes est traditionnellement abordée comme une tâche purement prédictive. Ce travail propose de l'utiliser comme un instrument métrologique permettant de quantifier et d'interpréter la pertinence de différents paradigmes de l'état de l'art (topologiques, communautaires et géométriques) pour expliquer l'organisation d'un graphe. Nous développons un cadre d'explicabilité \textit{post-hoc} additive fondé sur le couplage d'un méta-classificateur non linéaire (\textit{XGBoost}) et de la théorie des jeux coopératifs via les valeurs de Shapley (SHAP). Ce modèle permet d'isoler les forces structurantes du réseau à l'échelle locale (la dyade) et globale (le graphe complet). 
+
+Pour valider ce framework sur une source de vérité connue, nous introduisons un protocole de génération de graphes hybrides synthétiques géométrico-communautaires, corrigé des biais de filiation par un algorithme d'alignement numérique des variances théoriques. L'expérimentation met en évidence une limite conceptuelle majeure de la littérature : une forte colinéarité et redondance informationnelle entre les algorithmes de blocs (ex. Louvain) et les plongements d'espaces latents (ex. \textit{node2vec}), qui s'ajustent mutuellement sur leurs signaux respectifs, altérant l'explicabilité causale. 
+
+Pour lever ce verrou, nous proposons deux méthodes originales d'inférence de caractéristiques décorrélées par débiaisage spatial : d'une part, une approche de détection de communautés intégrant un modèle nul gravitaire au cœur du calcul de modularité de Louvain, et d'autre part, une approche d'inférence d'\textit{embedding} ($\text{SiNEcustom}$) apprenant un plongement vectoriel sur la matrice des résidus du modèle nul. Validées statistiquement sur notre \textit{benchmark}, ces contributions démontrent l'efficacité de l'orthogonalisation pour isoler les facteurs d'influence au sein des structures complexes, ce qui favorise l'explicabilité.
+
+\vspace{0.4cm}
+\noindent \textbf{Mots-clés:} Prédiction de liens, Intelligence artificielle explicable (XAI), Valeurs de Shapley, Modèles en blocs stochastiques, Plongement de graphes, Modèles nuls, débiaisage.
+
+\vspace{1.3cm} % Un peu d'espace entre les deux versions
+
+\noindent \textbf{Abstract.} Link prediction in complex networks is traditionally approached as a purely predictive task. This work proposes to use it as a metrological instrument to quantify and interpret the relevance of various state-of-the-art paradigms (topological, community-based, and geometric) in explaining graph organization. We develop an additive \textit{post-hoc} explainability framework based on coupling a non-linear meta-classifier (\textit{XGBoost}) with cooperative game theory via Shapley values (SHAP). This model isolates the structuring forces of the network at both the local scale (the dyad) and the global scale (the full graph).
+
+To validate this framework against a known ground truth, we introduce a generation protocol for synthetic hybrid geometric-community graphs, corrected for lineage bias using a numerical alignment algorithm for theoretical variances. The experimentation highlights a major conceptual limitation in the literature: a strong collinearity and informational redundancy between block algorithms (e.g., Louvain) and latent space embeddings (e.g., \textit{node2vec}), which mutually adjust to their respective signals, thereby impairing causal explainability.
+
+To overcome this bottleneck, we propose two original methods for inferring decorrelated features through spatial debiasing: on the one hand, a community detection approach incorporating a gravity null model into the core of the Louvain modularity optimization, and on the other hand, an embedding inference approach ($\text{SiNEcustom}$) that learns a vector embedding on the residual matrix of the null model. Statistically validated on our \textit{benchmark}, these contributions demonstrate the effectiveness of orthogonalization in isolating factors of influence within complex structures, thereby enhancing explainability.
+
+\vspace{0.4cm}
+\noindent \textbf{Keywords:} Link prediction, Explainable artificial intelligence (XAI), Shapley values, Stochastic block models, Graph embedding, Null models, Debiasing.
+\end{small}
+\end{quotation}
+\addvspace{4.5em} 
+
+%%%%%%%%%%%%%%%%%%%%%%%%
+%%% DEBUT DU RAPPORT %%%
+%%%%%%%%%%%%%%%%%%%%%%%%
+
+\input{01_Introduction}
+
+\input{02_Etat de l'art}
+
+\input{03_GraphBenchmarkGeneration}
+
+\input{04_SHAP-like Explicabilité additive multi-modèle}
+
+\input{05_Inférence de représentations structurelles débiaisées}
+
+\input{06_Discussion}
+    
+\begin{credits}
+\subsubsection{Remerciements:} merci à Rémy Cazabet, encadrant de ce stage, pour ses conseils et sa guidance tout au long du projet. Merci à lui de s'être rendu disponible pour de longs échanges hebdomadaires toujours passionants, même depuis l'autre bout du monde, qui n'ont pû que confirmer mon goût pour la recherche. Travailler avec lui sur ce projet a été un véritable plaisir et ces 5 mois sont passés en un clin d'oeil. Merci aux collègues doctorants, post-doctorants et stagiaires du LIRIS d'avoir égayé mes journées, ainsi qu'aux permanents avec qui j'ai pu échanger. Enfin, merci au laboratoire, à ses responsables et volontaires, de mettre à disposition ce cadre et les moyens de mener à bien nos recherches.
+\end{credits}
+
+% ---- Bibliography ----
+\input{69_biblio}
+
+\newpage
+
+% ---- Annexes ----
+\input{07_Annexes}
+
+\end{document}

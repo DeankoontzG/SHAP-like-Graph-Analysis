@@ -1,0 +1,38 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Ce rapport présente les travaux de recherche menés du 16 mars au 17 juillet 2026 dans le cadre de mon stage de fin d'études de Master 2 Informatique, spécialité Intelligence Artificielle, à l'Université Claude Bernard Lyon 1. Ce stage s'est déroulé au sein de l'équipe \textbf{DM2L} (Data Mining \& Machine Learning) du \textbf{LIRIS} (Laboratoire d'Informatique en Image et Systèmes d'Information), sous la direction de \textbf{Rémy Cazabet}, maître de conférences. 
+
+L'équipe DM2L centre ses activités de recherche sur l'extraction et la découverte de connaissances à partir de données (Data Mining), via des approches  automatisées et semi-automatisées. Bien que ce stage se focalise sur l'extraction de données depuis des Graphes, leurs recherches s'appliquent également à d'autres représentations telles que les données spatio-temporelles, tenseurs, ensembles, ou encore au texte dans le cadre du Natural Language Processing. L'équipe est particulièrement active sur des thématiques au cœur de ce projet, dont le \textit{Graph Learning \& Mining} (graphes dynamiques, attribués, temporels) et l'intelligence artificielle explicable (\textit{XAI}). Son objectif fondamental est de proposer des contributions théoriques et algorithmiques qui permettent aux experts d'améliorer la qualité des connaissances qu'ils sont en capacité d'extraire de leurs données, ou d'en extraire de nouvelles.
+
+
+\subsection{Contexte et Motivation Scientifique}
+L'analyse de réseaux s'appuie en grande partie sur des modèles statistiques et d'apprentissage pour capturer les propriétés structurelles des graphes. Dans ce domaine, la \textbf{prédiction de liens} (\textit{link prediction}) est traditionnellement abordée comme une tâche prédictive visant à anticiper l'apparition d'arêtes futures ou manquantes. Cependant, dans le cadre de ce projet de recherche, la prédiction de liens n'est pas considérée comme une fin en soi, mais plutôt comme un \textbf{indicateur métrologique} : elle permet de mesurer à quel point une formalisation mathématique ou une structure observée (communautés, blocs, embeddings) explique fidèlement le graphe observé.
+
+De nombreux modèles (Louvain\cite{louvain2008}, SBM\cite{sbm1983}, modèles d'espace latent\cite{deepwalk2014}\cite{node2vec2016}) excellent dans cette tâche, et il a été montré que les stacker permet d'atteindre d'excellentes performances\cite{01stackingLinkPred}, égalant même l'état de l'art.
+
+Cependant, comprendre et quantifier précisément la contribution de chaque structure sous-jacente reste un défi majeur. Ce projet part de l'hypothèse que les graphes réels sont issus d'une pluralité de facteurs qui influencent en parallèle la création de lien, avec des interactions non linéaires complexes entre eux. Les méthodes actuelles d'explicabilité appliquées aux graphes fournissent principalement des explications locales sous forme de sous-graphes pondérés. L'interprétation cognitive de ces sous-graphes reste entièrement à la charge de l'utilisateur, ce qui limite leur transférabilité et leur rigueur opérationnelle.
+
+\subsection{Objectifs du Stage}
+Ce projet, par nature très exploratoire, vise à lever ce verrou en offrant de nouvelles pistes d'explication. 
+
+La première est la conception d'une nouvelle méthode d'\textit{explicabilité multi-modèle additive}, conceptuellement inspirée de l'approche SHAP (\textit{SHapley Additive exPlanations}) issue de la théorie des jeux coopératifs \cite{lordShapleyOriginal_1953}. 
+
+L'originalité de l'approche consiste à décomposer la probabilité de prédiction d'un lien non pas en fonction de variables de nœuds isolées, mais comme une \textbf{somme d'effets} provenant de différents modèles de graphes globaux préalablement ajustés sur le réseau d'intérêt. Nous considérons ainsi une approche multi-modèle combinant par exemple :
+\begin{itemize}
+    \item La structure topologique (centralité, degré, ...)
+    \item Les structures de communautés (Louvain, SBM, ...) ;
+    \item Les modèles d'espace latent (\textit{latent space models} tel que \textit{node2vec}) ;
+\end{itemize}
+
+Pour un graphe donné, l'objectif est de fournir \textbf{une explicabilité locale :} c'est à dire déterminer pour un couple de nœuds $(u, v)$ donné les facteurs explicatifs dominants (par exemple, l'appartenance à une même communauté ou la proximité latente). Et également \textbf{une explicabilité globale :} permettre, par sommation des explications locales, de caractériser la topologie et les forces structurantes du réseau dans son ensemble.
+
+La seconde est l'exploration de méthodes d'inférence de métriques décorrélées entre elles, ou par rapport à une référence connue. Bien que le stacking d'un grand nombre de modèles permette d'atteindre d'excellentes performances, les modèles qui le composent capturent des informations très redondantes, ce qui en complexifie l'explicabilité. L'inférence de métriques décorrélées permettrait de résoudre ce problème en offrant une décomposition où chaque modèle ou métrique capture un facteur d'influence unique.
+Ce stage propose 2 approches de ce type, permettant respectivement l'inférence de communautés de Louvain, et d'embeddings, décorrélés par rapport à la position (réelle ou inférée) de noeuds.
+
+\subsection{Structure du Rapport}
+Pour rendre compte de ces travaux, ce rapport est structuré comme suit :
+La \textbf{partie 2} présente l'état de l'art des méthodes et modèles de prédiction de liens, des modèles structurels de graphes et des fondements théoriques de l'explicabilité additive.
+Le \textbf{Chapitre 2} détaille la formalisation mathématique et l'architecture du modèle XAI multi-modèle développé durant ce stage.
+Le \textbf{Chapitre 3} expose le protocole expérimental, les simulations sur réseaux synthétiques et réels, ainsi qu'une analyse critique des résultats obtenus.
+Enfin, la conclusion dresse un bilan de ce projet exploratoire et ouvre sur les perspectives de recherche associées.

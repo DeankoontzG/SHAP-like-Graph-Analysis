@@ -1,0 +1,85 @@
+\section{Modèle génératif de graphes hybrides géométrico-communautaires}
+\label{sec:modele_hybride}
+
+La première brique méthodologique de ce projet consiste à définir un protocole de génération de graphes artificiels. L'objectif est de disposer d'un \textit{benchmark} contrôlé faisant office de vérité de terrain (\textit{ground truth}) afin de valider rigoureusement le comportement et la fidélité de notre modèle d'explicabilité additive sur une source de vérité connue. Pour évaluer conjointement l'influence de l'homophilie de bloc et de la proximité géométrique, nous introduisons une méthodologie d'hybridation paramétrique entre un modèle en blocs stochastiques (SBM) et un modèle spatial gravitaire.
+
+Bien que notre cadre algorithmique intègre les variantes corrigées des degrés (\textit{Degree-Corrected} ou DC), les développements et validations expérimentales présentés dans ce rapport se focalisent sur les formulations non corrigées (\textit{non-DC}). Ce choix méthodologique permet de conserver un benchmark qui isole les facteurs que l'on cherche à analyser (communautés et géométrie), sans faire intervenir d'autres éléments suceptibles d'influencer les résultats.
+
+
+\subsection{Formulation des modèles parents (non-DC)}
+
+Afin de construire le mélange, les deux modèles parents sont calibrés indépendemment sur une même espérance de densité globale, garantissant qu'aucun modèle ne domine le processus d'échantillonnage par un simple excédent de masse d'arêtes.
+
+\subsubsection{Le modèle communautaire : $\text{non-DC SBM}$}
+Ce modèle SBM classique répartit les $N$ nœuds dans un ensemble de blocs latents via un vecteur d'assignation $b$. La probabilité d'existence d'un lien entre deux sommets $u$ et $v$ dépend exclusivement de l'inter-connectivité globale de leurs blocs respectifs $b_u$ et $b_v$. Dans l'objectif de générer des graphes réalistes, cette matrice a été inférée sur des graphes réels avec l'aide de la librairie graph-tools. Pour chaque paire de blocs $(r, s)$, le calcul détermine le ratio entre le nombre d'arêtes observées $e_{rs}$ et le nombre d'arêtes maximales théoriquement possibles dépendant du nombre de noeuds dans chaque bloc, notés $N_{b_u}$ et $N_{b_v}$
+\begin{equation}
+    P^{\text{SBM}}_{uv} = \frac{e_{b_u b_v}}{N_{b_u} N_{b_v}} \quad (\text{si } b_u \neq b_v) \quad \text{et} \quad P^{\text{SBM}}_{uv} = \frac{e_{b_u b_u}}{N_{b_u}(N_{b_u}-1)/2} \quad (\text{si } b_u = b_v)
+\end{equation}
+
+\subsubsection{Le modèle géométrique : $\text{non-DC Spatial}$}
+Le modèle spatial repose sur une fonction de dissuasion dépendant de la distance euclidienne $d_{uv}$ au sein d'un espace latent préalablement réduit par ACP à 4 dimensions. Le paramètre d'échelle $\sigma$ controle l'impact de l'éloignement physique sur la décroissance des probabilités. Pour une cible globale de liens attendus $E_{\text{target}}$, le modèle recherche le paramètre $\alpha^*$ en résolvant le système suivant via un solveur numérique :
+\begin{equation}
+    P^{\text{Spatial}}_{uv} = \frac{1}{1 + e^{-(\alpha^* - \sigma \cdot d_{uv})}} \quad \text{tel que} \quad \sum_{u < v} P^{\text{Spatial}}_{uv} = E_{\text{target}}
+\end{equation}
+
+\subsubsection{Le modèle communautaire : $\text{DC-SBM}$}
+Le modèle en blocs stochastiques corrigé des degrés ($\text{DC-SBM}$) intègre la séquence des degrés $k$ afin de capturer l'hétérogénéité des nœuds (comme la présence de \textit{hubs}). En s'appuyant sur la formulation de Karrer et Newman \cite{karrer2011stochastic} implémentée via la bibliothèque \texttt{graph-tool}, la probabilité d'existence d'une arête entre $u$ et $v$ dépend du produit externe de leurs degrés, modulé par l'interraction globale des blocs $e_{b_u b_v}$ et le volume total de degrés de chaque communauté, notés $e_{b_u}$ et $e_{b_v}$ :
+\begin{equation}
+    P^{\text{SBM-DC}}_{uv} = k_u k_v \cdot \frac{e_{b_u b_v}}{e_{b_u} e_{b_v}} \quad \text{en clippant} \quad P^{\text{SBM-DC}} = \min(1.0, P^{\text{SBM-DC}})
+\end{equation}
+
+\subsubsection{Le modèle géométrique : $\text{DC-Spatial}$}
+Pour contraindre le modèle spatial à respecter la séquence de degrés cible $k$, nous formulons le problème en introduisant la notion de degrés latents notés $\alpha_i$. En conservant la même fonction de dissuasion liée à la distance $d_{uv}$, le modèle les ajuste conjointement au paramètre d'impact de la distance déjà existant dans l'approche \textit{non-DC}. Ces paramètres sont optimisés par une descente de gradient itérative visant à annuler l'erreur locale sur le degré de chaque nœud :
+\begin{equation}
+    P^{\text{Spatial-DC}}_{uv} = \frac{1}{1 + e^{-(\alpha_u + \alpha_v - \sigma \cdot d_{uv})}} \quad \text{tel que} \quad \forall u \in V, \sum_{v \neq u} P^{\text{Spatial-DC}}_{uv} = k_u
+\end{equation}
+
+\subsection{Le problème du biais de variance et sa résolution numérique}
+
+Une fois les deux matrices de probabilités de base $P^{\text{SBM}}$ et $P^{\text{Spatial}}$ obtenues, l'approche intuitive d'hybridation consiste à effectuer un mélange linéaire combinatoire (somme pondérée) régi par le ratio  $\alpha \in [0, 1]$ :
+\begin{equation}
+    P^{\text{hybride}}_{\text{linéaire}} = \alpha P^{\text{SBM}} + (1-\alpha) P^{\text{Spatial}}
+\end{equation}
+
+Cependant, l'analyse mathématique du comportement de l'échantillonnage associé révèle une limite théorique majeure liée à la variance de ces distributions.
+
+\begin{theorem}
+Soit $X$ un graphe aléatoire simple issu du mélange linéaire de deux matrices de probabilités indépendantes $P_S = \alpha P_1 + (1-\alpha) P_2$. Soit $X^{(i)}$ un graphe témoin généré de manière exclusive par le modèle parent $M_i$ via la matrice de probabilités $P_i$. 
+
+Sous les deux hypothèses structurelles suivantes :
+\begin{description}
+    \item[Hypothèse d'Équité :] $\mathbb{E}[P_1] = \mathbb{E}[P_2] = \rho \implies \mathbb{E}[P_S] = \rho$
+    \item[Hypothèse d'Indépendance :] $\mathbb{E}[P_1 P_2] = \mathbb{E}[P_1]\mathbb{E}[P_2] = \rho^2$
+\end{description}
+
+Alors, le ratio de filiation relative $\mathcal{R}_F$, définissant le rapport des probabilités conditionnelles de coïncidence des arêtes $\frac{P(X^{(1)} = 1 \mid X = 1)}{P(X^{(2)} = 1 \mid X = 1)}$, est gouverné par les variances des modèles parents. Dans le régime des réseaux sparses ($\rho \ll 1$), ce ratio converge vers le rapport des variances pondérées :
+\begin{equation}
+    \mathcal{R}_F = \frac{\mathcal{F}_1}{\mathcal{F}_2} = \frac{\alpha \text{Var}(P_1) + \rho^2}{(1-\alpha) \text{Var}(P_2) + \rho^2} \underset{\rho \ll 1}{\approx} \frac{\alpha \text{Var}(P_1)}{(1-\alpha) \text{Var}(P_2)}
+\end{equation}
+\end{theorem}
+
+La démonstration complète de ce théorème est reportée en Annexe 1 (\ref{sec:Annexe 1}).
+
+Ce résultat mathématique prouve que le graphe hybride échantillonné est biaisé en faveur du modèle manifestant la plus forte polarisation (variance élevée), rendant le ratio $\alpha$ asymétrique lors du tirage.
+
+\subsubsection{Alignement algorithmique des variances}
+Pour neutraliser ce biais à la source et stabiliser la validité de notre \textit{benchmark}, nous introduisons un mécanisme d'égalisation numérique via la fonction \texttt{match\_spatial\_to\_sbm\_variance}. Le principe consiste à utiliser la variance de la matrice communautaire comme une cible fixe ($\text{Var}(P^{\text{SBM}})$) et à rechercher le paramètre de dissuasion optimal $\sigma^*$ qui contraint le modèle spatial à adopter une variance quasi-identique :
+\begin{equation}
+    \sigma^* = \arg\min_{\sigma} \left( \text{Var}\left(P^{\text{Spatial}}(\sigma)\right) - \text{Var}\left(P^{\text{SBM}}\right) \right)^2
+\end{equation}
+Cette égalisation garantit que l'attractivité topologique finale du graphe mixte dépend exclusivement du paramètre d'ajustement $\alpha$ choisi par l'expérimentateur, et surtout de manière symétrique : le graphe hybride obtenu à $\alpha = 0.7$ sera autant communautaire que celui à $\alpha = 0.3$ est spatial.
+
+\subsection{Amplification du contraste : L'agrégation par exposant adaptatif}
+
+En complément du mélange linéaire à variance égale, une approche alternative non linéaire baptisée \textbf{Custom Exposant} a été développée. L'objectif de cette méthode n'est pas d'ajuster statistiquement les modèles parents, mais d'exacerber volontairement le contraste des probabilités entre les 2 modèles génératifs lors de l'hybridation. En écrasant les zones d'incertitude diffuse (faibles probabilités), cette méthode ne conserve que les configurations fortement marquées (les arêtes « caractéristiques ») propres à chaque paradigme. 
+
+D'un point de vue pratique, cette configuration sert d'outil d'augmentation de la lisibilité du contexte expérimental : en polarisant radicalement la matrice de probabilités, on simplifie la tâche de discrimination des classificateurs de liens, ce qui permet de vérifier de manière robuste si nos frameworks d'explicabilité capturent bien les signaux topologiques dominants.
+
+Le processus applique une puissance polynomiale $k$ (fixée à $4$) sur les matrices parentes afin d'écraser les valeurs intermédiaires avant d'effectuer le mélange. Une telle transformation détruisant l'espérance mathématique globale, l'algorithme met en œuvre une recherche simple par dichotomie afin de déterminer l'exposant correcteur global $j$ garantissant le maintien de la masse de liens visée ($E_{\text{target}}$) :
+\begin{equation}
+    P^{\text{base}} = \alpha (P^{\text{SBM}})^k + (1-\alpha) (P^{\text{Spatial}})^k
+\end{equation}
+\begin{equation}
+    P^{\text{hybride}}_{\text{exposant}} = (P^{\text{base}})^j \quad \text{avec $j$ tel que} \quad f(j) = \sum_{u < v} (P^{\text{base}}_{uv})^j - E_{\text{target}} = 0
+\end{equation}
+

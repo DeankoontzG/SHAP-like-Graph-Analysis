@@ -1,0 +1,6 @@
+\beamer@sectionintoc {1}{Introduction et Problématique}{3}{0}{1}
+\beamer@sectionintoc {2}{Le benchmark de graphes hybrides}{6}{0}{2}
+\beamer@sectionintoc {3}{Framework d'Explicabilité Additive (XGBoost + SHAP)}{9}{0}{3}
+\beamer@sectionintoc {4}{Décorrélation, méthode 1 : Louvain débiaisé}{16}{0}{4}
+\beamer@sectionintoc {5}{Décorrélation, méthode 2 : SiNE débiaisé }{20}{0}{5}
+\beamer@sectionintoc {6}{Conclusion et Perspectives}{23}{0}{6}

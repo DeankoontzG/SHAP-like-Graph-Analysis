@@ -1,29 +1,21 @@
 from .MetaLouvain import *
-from .SiNEcustom import *
-from .iterative_debiaisage import *
-from .models import train_and_test_xgboost, get_performance_metrics
 
 import random
-import math
-import html
-import io
 from re import X
 import numpy as np
 import pandas as pd
 import networkx as nx
-import networkx.algorithms.community as nx_comm
-from networkx.algorithms.community import louvain_communities
-import inspect
 import igraph as ig
 from pyvis.network import Network
 import itertools
 from math import factorial
+from networkx.algorithms.community import louvain_communities
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.metrics import roc_auc_score, average_precision_score
 from sklearn.model_selection import KFold, train_test_split
 from scipy.sparse.linalg import eigsh
 from scipy.spatial.distance import cdist, pdist, squareform
-from scipy.optimize import root_scalar, minimize_scalar, minimize
+from scipy.optimize import root_scalar, minimize_scalar
 from scgravity import filter_data, create_q_bin, calculate_mass
 import statsmodels.api as sm
 from NEMtropy import UndirectedGraph
@@ -49,7 +41,6 @@ import json
 from xgboost import XGBClassifier
 import optuna
 import time
-import inspect
 
 
 
@@ -59,31 +50,11 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['orthoModulo_posEig', 'orthoModulo_allEig']
-#['n2v_homophily', 'deepwalk', 'crosswalk']
-"""
-[
-    #'SiNEcustom', #'SiNE',
-    'SiNEcustom_spatial', 'deepwalk',
-    'SiNEcustom_spatial_bined', 
-    #'SiNE_spatial','SiNE_spatial_bined', 
-]
-"""
-
-COMMUNITY_ALGOS = [] #['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
-"""
-[
-    #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
-    'louvain',"spatial_louvain", 
-    'spatial_louvain_bined',
-    #'spatial_louvain_old',
-    #"spatial_louvain_manualiter_0_20", "spatial_louvain_manualiter_0_50", "spatial_louvain_manualiter_0_80"
-    ]
-"""
-
-
-METRICS_NODE = [] #["degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
-#[]
+EMBEDDINGS = ['n2v_homophily', 'deepwalk', 'crosswalk']
+COMMUNITY_ALGOS = ['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance', 
+"spatial_leiden", "spatial_louvain",  "spatial_leiden_scgravity", "spatial_louvain_scgravity",
+"spatial_leiden_wrdb","spatial_louvain_wrdb"]
+METRICS_NODE = [ "degree", "pr", "ppr", "lcc", "and", "dc", "katz"]
 
 #################################################
 # FONCTIONS DE VALIDATION DES DONNES EN ENTREE ##
@@ -261,24 +232,15 @@ def prepare_balanced_data(G, G_train, negative_ratio=10.0, GroundTruth = None, n
         
     if GroundTruth is not None:
         print(f"Injection de la Ground Truth ({len(GroundTruth)} sources)...")
-        node_list = list(G.nodes()) # L'ordre utilisé lors de la création de GT_pos
-        mapping = {node_id: i for i, node_id in enumerate(node_list)}
-        
-        indices_u = df['u'].map(mapping).values.astype(int)
-        indices_v = df['v'].map(mapping).values.astype(int)
+        indices_u = df['u'].values.astype(int)
+        indices_v = df['v'].values.astype(int)
         
         for feat_name, data in GroundTruth.items():
-            if data is None:
-                continue
-                
             # Cas spécifiques (nominatifs) 
             if feat_name == 'GT_pos':
                 pos_u = data[indices_u]
                 pos_v = data[indices_v]
                 df['GT_pos_dist'] = np.linalg.norm(pos_u - pos_v, axis=1)
-                #eucl = np.linalg.norm(pos_u - pos_v, axis=1)
-                #R = np.linalg.norm(pos_u[0])
-                #df['GT_pos_dist'] = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
                 
                 deg_spatial = GroundTruth.get('GT_degrees_spatial')
                 if deg_spatial is not None :
@@ -371,150 +333,28 @@ def is_partition_robust(G, partition_dict, K_min=3, min_edge_ratio=0.01):
     
     return len(robust_commus) >= K_min
 
-def calculate_surprise(G, partition_dict, null_model=None):
-    """
-    Calcule la Surprise d'une partition, adaptée au modèle nul si fourni.
-    """
-    n = G.number_of_nodes()
-    m = G.number_of_edges()
-    if m == 0: return 0
-
-    # 1. Inversion du dictionnaire pour grouper par communauté
-    com_to_nodes = {}
-    for node, com in partition_dict.items():
-        com_to_nodes.setdefault(com, []).append(node)
-    
-    p = 0  # Nombre d'arêtes internes réelles
-    
-    if null_model is not None:
-        # --- CAS MODÈLE NUL SPATIAL ---
-        expected_internal_edges = 0.0
-        
-        for nodes in com_to_nodes.values():
-            ni = len(nodes)
-            if ni < 2: continue
-            
-            # Compte des arêtes réelles internes
-            sub = G.subgraph(nodes)
-            p += sub.number_of_edges()
-            
-            # Somme des probabilités du modèle nul pour toutes les paires internes
-            # On fait une double boucle simple pour éviter les doublons (u < v)
-            nodes_list = list(nodes)
-            for i in range(ni):
-                for j in range(i + 1, ni):
-                    u = nodes_list[i]
-                    v = nodes_list[j]
-                    # On interroge ton modèle nul matriciel
-                    expected_internal_edges += null_model(u, v)
-        
-        # x : densité d'arêtes internes observée
-        # y : densité d'arêtes internes attendue par le modèle gravitaire
-        x = p / m
-        y = expected_internal_edges / m
-        
-    else:
-        # --- CAS CLASSIQUE (UNIFORME) ---
-        M = n * (n - 1) / 2
-        P = 0
-        for nodes in com_to_nodes.values():
-            ni = len(nodes)
-            if ni < 2: continue
-            sub = G.subgraph(nodes)
-            p += sub.number_of_edges()
-            P += ni * (ni - 1) / 2
-            
-        if P <= 0 or P >= M: return 0
-        x = p / m
-        y = P / M
-
-    # 3. Calcul de la Surprise via la divergence KL (commune aux deux méthodes)
-    # Sécurité pour les bornes de la divergence KL
-    if x <= 0 or x >= 1 or y <= 0 or y >= 1:
-        # Si on observe moins ou autant que le modèle nul, la surprise est nulle 
-        # (on ne cherche à valoriser que la surfraction de liens internes)
-        if x <= y: return 0
-        return 0
-
-    try:
-        surprise = m * (x * math.log(x / y) + (1 - x) * math.log((1 - x) / (1 - y)))
-    except (ValueError, ZeroDivisionError):
-        return 0
-    
-    return surprise
-
-
-def _find_best_partition(G, partition_func, K_min=3, min_edge_ratio=0.01, resolutions=None, **kwargs):
-    """
-    Explore les résolutions de manière bidirectionnelle à partir du pivot physique 1.0.
-    S'arrête dès qu'une partition robuste (K_min) est trouvée.
-    """
-    null_model = kwargs.get('null_model', None)
-    sig = inspect.signature(partition_func)
-    filtered_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-    
-    if null_model is not None and 'null_model' not in filtered_kwargs:
-        filtered_kwargs['null_model'] = null_model
-
-    # Génération d'une séquence de résolutions alternée à partir de 1.0 : 
-    #[1.0, 1.2, 0.83, 1.44, 0.69, 1.73, 0.58, 2.07, 0.48]
-    if resolutions is None:
-        resolutions = [1.0]
-        res_up = 1.0
-        res_down = 1.0
-        for _ in range(5):
-            res_up *= 1.2
-            res_down /= 1.2
-            resolutions.append(round(res_up, 2))
-            resolutions.append(round(res_down, 2))
-
-    best_overall_partition = None
-    best_res = 1.0
-    
-    for res in resolutions:
-        # Sécurité : Louvain n'accepte pas les résolutions négatives ou nulles
-        if res <= 0:
-            continue
-            
-        communities_raw = partition_func(G, resolution=res, **filtered_kwargs)
-        
-        if isinstance(communities_raw, dict):
-            partition_dict = communities_raw.copy()
-        else:
-            partition_dict = {}
-            for i, community in enumerate(communities_raw):
-                for node in community:
-                    partition_dict[node] = i
-
-        num_commus = len(set(partition_dict.values()))
-        print(f"RES LOGS - ({num_commus} commus inférées pour res = {res:.2f})")
-        
-        # Sauvegarde par défaut (sur le premier élément de la liste, donc 1.0)
-        if best_overall_partition is None:
-            best_overall_partition = partition_dict.copy()
-            best_res = res
-
-        # Dès qu'une résolution (qu'elle soit plus haute ou plus basse) offre une partition robuste, on valide
-        if is_partition_robust(G, partition_dict, K_min=K_min, min_edge_ratio=min_edge_ratio):
-            best_overall_partition = partition_dict.copy()
-            best_res = res
-            print(f" Structure robuste trouvée à res = {best_res:.2f}")
-            return best_overall_partition
-
-    print(f"Attention : Aucun niveau de résolution n'a satisfait K_min={K_min}.")
-    print(f"Retour de la partition par défaut (res = {best_res:.2f})")
-    return best_overall_partition
-    
-
 def _appendLouvainCommunities(G_train, K_min=3, min_edge_ratio=0.01):
-    best_p = _find_best_partition(
-        G_train, 
-        nx.community.louvain_communities, 
-        K_min=K_min, 
-        min_edge_ratio=min_edge_ratio,
-    )
+    res = 1.0
+    attempts = 0
     
-    nx.set_node_attributes(G_train, best_p, "louvain_id")
+    valid = False
+    partition_dict = {}
+
+    while not valid and attempts < 12:
+        communities_list = nx.community.louvain_communities(G_train, seed=42, resolution=res)
+        
+        node_to_community = {} 
+        for i, community in enumerate(communities_list):
+            for node in community:
+                node_to_community[node] = i
+        
+        valid = is_partition_robust(G_train, node_to_community, K_min=K_min, min_edge_ratio=min_edge_ratio)
+        
+        if not valid:
+            res *= 1.2
+            attempts += 1
+
+    nx.set_node_attributes(G_train, node_to_community, "louvain_id")
     _normalize_community_assignment(G_train, "louvain_id")
     
     return G_train
@@ -611,8 +451,6 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
-    elif NullModel_method == "Radiation":
-        P, nodes = get_radiation_null_model_iterative(G_train, pos_attr)
     else : 
         P, nodes = optimize_scgravity_model(G_train, pos_attr)
     A = nx.to_numpy_array(G_train)
@@ -639,79 +477,10 @@ def _appendSpatialLeidenCommunities(G_train, pos_attr="GT_pos", attr_name = "spa
     
     return G_train
 
-def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "ManualIter",  K_min=3, min_edge_ratio=0.01):
-    if NullModel_method == "ManualReg" : 
-        P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
-    elif NullModel_method == "ManualIter":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-    elif NullModel_method == "ManualIter_Bined":
-        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr, speak=False)
-    elif NullModel_method == "ManualIter_0_20":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-
-        degrees = np.array([d for n, d in G_train.degree(nodes)])
-        m2 = np.sum(degrees)
-        P_config = np.outer(degrees, degrees) / m2
-        P = (0.2 * P) + (0.8 * P_config)
-    elif NullModel_method == "ManualIter_0_50":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-
-        degrees = np.array([d for n, d in G_train.degree(nodes)])
-        m2 = np.sum(degrees)
-        P_config = np.outer(degrees, degrees) / m2
-        P = (0.5 * P) + (0.5 * P_config)
-    elif NullModel_method == "ManualIter_0_80":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-
-        degrees = np.array([d for n, d in G_train.degree(nodes)])
-        m2 = np.sum(degrees)
-        P_config = np.outer(degrees, degrees) / m2
-        P = (0.8 * P) + (0.2 * P_config)
-    elif NullModel_method == "WithReelDegreesBiais":
-        P, nodes = get_gravity_null_model(G_train, pos_attr)
-    elif NullModel_method == "scgravity": 
-        P, nodes = optimize_scgravity_model(G_train, pos_attr)
-    A = nx.to_numpy_array(G_train)
-    P_symetric = (P + P.T) / 2
-
-    G_train.graph[f'P_Null_model_{NullModel_method}'] = P_symetric
-
-    asymmetry_sum = np.sum(np.abs(P - P_symetric))
-    max_diff = np.max(np.abs(P - P_symetric))
-
-    print(f"--- ANALYSE DE L'ASYMÉTRIE ---")
-    print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
-    print(f"Écart maximal ponctuel : {max_diff:.2e}")
-
-    mapping = {node: i for i, node in enumerate(nodes)}
-
-    def my_matrix_null_model(u, v):
-        idx_u = mapping[u]
-        idx_v = mapping[v]
-        return P_symetric[idx_u, idx_v]
-
-    # Appel de l'algorithme développé dans MetaLouvain.py, dans la loop qui cherche la best partition
-    partition = _find_best_partition(
-        G_train, 
-        best_partition, 
-        K_min=K_min, 
-        min_edge_ratio=min_edge_ratio,
-        null_model=my_matrix_null_model
-    )
-    
-    print("--- Diagnostic de l'objet partition ---")
-    print(f"Nombre de nœuds assignés : {len(partition)}")
-    print(f"Nombre de communautés trouvées : {len(set(partition.values()))}")
-    print("---------------------------------------")
-
-    nx.set_node_attributes(G_train, partition, attr_name)
-    
-    return G_train
-
-def _appendSpatialLouvainCommunities_old(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_old_id", NullModel_method = "ManualIter"):
+def _appendSpatialLouvainCommunities(G_train, pos_attr="GT_pos", attr_name = "spatial_louvain_id", NullModel_method = "Manual_Iterative"):
     if NullModel_method == "Manual" : 
         P, nodes = get_gravity_null_model_manual(G_train, pos_attr)
-    elif NullModel_method == "ManualIter":
+    elif NullModel_method == "Manual_Iterative":
         P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
     elif NullModel_method == "WithReelDegreesBiais":
         P, nodes = get_gravity_null_model(G_train, pos_attr)
@@ -765,25 +534,6 @@ def _appendSpatialLouvainCommunities_scgravity(G_train, pos_attr="GT_pos"):
 
 def _appendSpatialLouvainCommunities_WithReelDegreesBiais(G_train, pos_attr="GT_pos"):
     G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_wrdb_id" , NullModel_method = "WithReelDegreesBiais")
-
-def _appendSpatialLouvainCommunities_ManualReg(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualreg_id" , NullModel_method = "ManualReg")
-
-def _appendSpatialLouvainCommunities_radiation(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_radiation_id" , NullModel_method = "Radiation")
-
-def _appendSpatialLouvainCommunities_ManualIter_0_20(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_20_id" , NullModel_method = "ManualIter_0_20")
-
-def _appendSpatialLouvainCommunities_ManualIter_0_50(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_50_id" , NullModel_method = "ManualIter_0_50")
-
-def _appendSpatialLouvainCommunities_ManualIter_0_80(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_manualiter_0_80_id" , NullModel_method = "ManualIter_0_80")
-
-def _appendSpatialLouvainCommunities_Bined(G_train, pos_attr="GT_pos"):
-    G_train = _appendSpatialLouvainCommunities(G_train, pos_attr=pos_attr, attr_name = "spatial_louvain_bined_id" , NullModel_method = "ManualIter_Bined")
-
 
 def _normalize_community_assignment(G, attr_name):
     """ Remplace les NaN par des IDs uniques (singletons) """
@@ -1114,7 +864,7 @@ def get_gravity_null_model_manual(G, pos_attr='pos', speak=False):
     A_sum = len(G.edges())
     normalization_factor = 2*A_sum / P.sum()
     print(f"Vérification : Null Model donne P.sum / 2*nb_edges = {normalization_factor}")
-    print(f"Alpha moyen = {np.mean(alphas):.4f}, beta = {beta:.6f}")
+    print(f"Alpha moyen = {np.mean(alphas):.4f}, beta = {beta_final:.6f}")
     
     return P, nodes
 
@@ -1183,7 +933,7 @@ def gravity_inference_health_check(adjacency_mtx, P_mtx, dist_mtx):
         plt.tight_layout()
         plt.show()
 
-def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_iter=1000, speak = False):
+def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak = False):
     nodes = list(G.nodes())
     n = len(nodes)
     adj = nx.to_numpy_array(G)
@@ -1193,12 +943,6 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
     dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
     
-    #eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
-    #R = np.linalg.norm(pos_array[0]) 
-    #dist_matrix = 2 * R * np.arcsin(np.clip(eucl / (2 * R), 0, 1))
-    #print(f"DIST calculée bieng pour Airports, R = {R}")
-    
-   
     # Initialisation des paramètres
     alphas = np.zeros(n)
     beta = 1.0
@@ -1247,6 +991,32 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
             # MISE À JOUR BRIDÉE : On ne bouge pas de plus de 2.0 par étape
             step = f_x / f_prime
             alphas -= 0.5 * np.clip(step, -2.0, 2.0)
+       
+        """ 
+        for i in range(n):
+            if degrees[i] == 0:
+                alphas[i] = -20.0 # Valeur arbitrairement basse pour p -> 0
+                continue
+            
+            # Préparation des données pour le noeud i (on exclut j=i)
+            mask = np.ones(n, dtype=bool)
+            mask[i] = False
+            
+            # On passe les constantes nécessaires à func_alpha_i
+            res = root_scalar(
+                f = lambda x: func_alpha_i(
+                    alpha_i=x, 
+                    other_alphas=alphas[mask], 
+                    dist_row_i=dist_matrix[i, mask], 
+                    current_beta=beta, 
+                    target_k=degrees[i]
+                ),
+                x0=alphas[i], 
+                fprime=True, # L'algo s'attend à recevoir f(x), f'(x)
+                method='newton'
+            )
+            alphas[i] = res.root
+        """
             
         # 2. Mise à jour de beta
         res_beta = minimize_scalar(
@@ -1271,6 +1041,18 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
         if mae_degrees < tol:
             break
 
+    """
+    print(f"Distances : min={dist_matrix.min():.2f}, max={dist_matrix.max():.2f}, mean={dist_matrix.mean():.2f}")
+    test_beta = 1.0
+    test_ll = total_log_likelihood_beta(test_beta, alphas)
+    print(f"LL pour beta=1.0 : {test_ll}")
+    test_ll_0 = total_log_likelihood_beta(0.0, alphas)
+    print(f"LL pour beta=0.0 : {test_ll_0}")
+
+    if test_ll > test_ll_0:
+        print("ALERTE : La vraisemblance est meilleure à beta=0 qu'à beta=1. Le problème est dans les données ou le signe de LL.")
+    """
+
     print(f"Modèle gravitaire inféré, avec une MAE de {mae_degrees}, alpha moy = {np.mean(alphas):.4f} et beta = {beta}")  
     A_sum = len(G.edges())
     normalization_factor = 2*A_sum / P.sum()
@@ -1279,208 +1061,6 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
         gravity_inference_health_check(adj, current_P, dist_matrix)   
     
     return current_P, nodes
-
-
-def get_radiation_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=1000, speak=False):
-    nodes = list(G.nodes())
-    n = len(nodes)
-    adj = nx.to_numpy_array(G)
-    degrees = np.sum(adj, axis=1)
-    target_sum = np.sum(degrees)
-
-    # 1. Pré-calcul des distances et des masques s_ij
-    pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
-    # mask[i, j, k] est vrai si k est plus proche de i que ne l'est j
-    masks = [dist_matrix[i, :][:, np.newaxis] > dist_matrix[i, :][np.newaxis, :] for i in range(n)]
-
-    # Variables globales pour le monitoring via callback
-    iteration_data = {'count': 0, 'last_C': 0.0}
-
-    def compute_P_and_C(z_vec):
-        """Calcule la matrice P et le facteur de normalisation C."""
-        z = np.exp(z_vec)
-        s = np.zeros((n, n))
-        for i in range(n):
-            s[i, :] = np.dot(masks[i], z)
-        
-        zi = z[:, np.newaxis]
-        zj = z[np.newaxis, :]
-        denom = (zi + s) * (zi + zj + s)
-        
-        P_raw = np.divide(zi * zj, denom, out=np.zeros_like(s), where=denom!=0)
-        np.fill_diagonal(P_raw, 0)
-        
-        # Calcul de C pour que Sum(P) == Sum(Degrees)
-        current_sum = np.sum(P_raw)
-        C = target_sum / current_sum if current_sum > 0 else 1.0
-        return P_raw * C, C
-
-    def objective(z_vec):
-        """Fonction cible : on minimise la MSE sur les degrés."""
-        P, C = compute_P_and_C(z_vec)
-        iteration_data['last_C'] = C # Stockage pour le callback
-        pred_degrees = np.sum(P, axis=1)
-        # MSE est plus stable pour le gradient que la MAE
-        return np.mean((pred_degrees - degrees)**2)
-
-    def callback(z_vec):
-        """Affiche les stats toutes les 10 itérations."""
-        iteration_data['count'] += 1
-        if iteration_data['count'] % 10 == 0:
-            P, C = compute_P_and_C(z_vec)
-            pred_degrees = np.sum(P, axis=1)
-            mae = np.mean(np.abs(pred_degrees - degrees))
-            print(f"Iteration {iteration_data['count']}: MAE = {mae:.6f}, C = {C:.4e}")
-
-    # Initialisation : log des degrés (pour garantir z > 0)
-    # On clip pour éviter log(0)
-    x0 = np.log(np.clip(degrees, 1e-1, None))
-
-    if speak:
-        print(f"Lancement de l'optimisation L-BFGS-B pour {n} noeuds...")
-
-    res = minimize(
-        objective, 
-        x0=x0, 
-        method='L-BFGS-B',
-        callback=callback,
-        options={'maxiter': 200, 'ftol': 1e-7}
-    )
-
-    # Reconstruction finale
-    final_P, final_C = compute_P_and_C(res.x)
-    final_z = np.exp(res.x)
-    final_mae = np.mean(np.abs(np.sum(final_P, axis=1) - degrees))
-
-    print(f"\n--- Modèle de Radiation Optimisé ---")
-    print(f"MAE finale : {final_mae:.6f}")
-    print(f"Facteur de normalisation global C : {final_C:.4e}")
-
-    check_val = np.sum(final_P) / target_sum
-    print(f"Vérification : Null Model radiation donne P.sum / 2*nb_edges = {check_val:.4f}")
-    if speak :
-        gravity_inference_health_check(adj, final_P, dist_matrix)
-   
-    return final_P, nodes
-
-
-def get_gravity_bined_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter=500, speak=False):
-    """
-    Inférence d'un Null Model spatial non-paramétrique sans SciPy.
-    Utilise un double Newton-Raphson vectoriel croisé (Alphas et Gammas).
-    """
-    nodes = list(G.nodes())
-    n = len(nodes)
-    adj = nx.to_numpy_array(G, nodelist=nodes)
-    degrees = np.sum(adj, axis=1)
-    
-    # 1. Distances
-    pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
-
-    num_pairs = n * (n - 1) // 2
-    K = int(np.clip(num_pairs // 2000, 10, 50))
-    
-    if speak:
-        print(f"--- Initialisation du modèle spatial non-paramétrique (Newton-Loop) ---")
-        print(f"Nœuds : {n}, Bins calculés (K) : {K}")
-
-    # 2. Bins
-    iu_indices = np.triu_indices(n, k=1)
-    flat_distances = dist_matrix[iu_indices]
-    flat_edges = adj[iu_indices]
-    
-    quantiles = np.linspace(0, 100, K + 1)
-    bin_edges = np.percentile(flat_distances, quantiles)
-    bin_edges[-1] = np.inf 
-    bin_edges[0] = 0.0
-    
-    flat_bin_assignments = np.digitize(flat_distances, bin_edges[:-1]) - 1
-    flat_bin_assignments = np.clip(flat_bin_assignments, 0, K - 1)
-    
-    observed_links_per_bin = np.bincount(flat_bin_assignments, weights=flat_edges, minlength=K)
-
-    # 3. Initialisation des paramètres
-    alphas = np.zeros(n)
-    gammas = np.zeros(K) # Friction initiale nulle
-    gamma_matrix = np.zeros((n, n))
-    old_mae_bins = 999.0
-
-    # 5. BOUCLE PRINCIPALE
-    for iteration in range(max_iter):
-        
-        # --- ÉTAPE A : RECONSTRUCTION DE LA MATRICE DES GAMMAS ---
-        flat_gamma = gammas[flat_bin_assignments]
-        gamma_matrix[iu_indices] = flat_gamma
-        gamma_matrix[(iu_indices[1], iu_indices[0])] = flat_gamma
-        
-        # --- ÉTAPE B : NEWTON-RAPHSON SUR LES ALPHAS (5 itérations) ---
-        for _ in range(5):
-            theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - gamma_matrix
-            theta = np.clip(theta, -50, 50)
-            
-            P = 1.0 / (1.0 + np.exp(-theta))
-            np.fill_diagonal(P, 0)
-            
-            f_x = np.sum(P, axis=1) - degrees
-            f_prime = np.sum(P * (1.0 - P), axis=1) + 1e-6
-            
-            alphas -= 0.5 * np.clip(f_x / f_prime, -2.0, 2.0)
-            
-        # --- ÉTAPE C : NEWTON-RAPHSON SUR LES GAMMAS (Mise à jour directe) ---
-        # On extrait les probabilités du triangle supérieur pour calculer l'état des bins
-        probs_flat = P[iu_indices]
-        predicted_links_per_bin = np.bincount(flat_bin_assignments, weights=probs_flat, minlength=K)
-        
-        # Gradient et Hessienne analytiques pour chaque bin
-        grad_gamma = predicted_links_per_bin - observed_links_per_bin
-        hess_gamma = np.bincount(flat_bin_assignments, weights=probs_flat * (1.0 - probs_flat), minlength=K) + 1e-6
-        
-        # Pas de Newton bridé pour éviter les sauts aberrants
-        gamma_step = grad_gamma / hess_gamma
-        gammas += 0.5 * np.clip(gamma_step, -2.0, 2.0)
-        
-        # Contrainte d'ancrage : le bin 0 reste fixé à 0, et pas de valeurs négatives de friction
-        gammas[0] = 0.0
-        gammas = np.clip(gammas, 0.0, 40.0)
-        
-        # --- ÉTAPE D : MESURE DE LA CONVERGENCE GLOBALE ---
-        predicted_degrees = np.sum(P, axis=1)
-        mae_degrees = np.mean(np.abs(predicted_degrees - degrees))
-        mae_bins = np.mean(np.abs(predicted_links_per_bin - observed_links_per_bin))
-        
-        if speak and iteration % 10 == 0:
-            print(f"Iter {iteration:3d} | MAE Degrés = {mae_degrees:.6f} | MAE Bins = {mae_bins:.4f} | Max Gamma = {gammas.max():.2f}")
-            
-        # On ne converge QUE si les deux critères (degrés ET bins) sont validés de concert
-        if mae_degrees < tol and mae_bins < 1.0 and iteration > 5:
-            if speak: print(f"-> Convergence simultanée atteinte à l'itération {iteration} !")
-            break
-
-        if np.abs(old_mae_bins - mae_bins) < 1e-5 and iteration > 5:
-            if speak: print(f"-> Arrêt prématuré : stagnation du modèle atteinte à l'itération {iteration} (Plateau mathématique).")
-            break
-
-        old_mae_bins = mae_bins
-
-    # Reconstruction finale de sécurité
-    flat_gamma = gammas[flat_bin_assignments]
-    gamma_matrix[iu_indices] = flat_gamma
-    gamma_matrix[(iu_indices[1], iu_indices[0])] = flat_gamma
-    
-    theta = alphas[:, np.newaxis] + alphas[np.newaxis, :] - gamma_matrix
-    current_P = 1.0 / (1.0 + np.exp(-np.clip(theta, -50, 50)))
-    np.fill_diagonal(current_P, 0)
-
-    print("\n--- Diagnostic final bined spatial commu ---")
-    final_probs_flat = current_P[iu_indices]
-    print(f"MAE des degrés final : {np.mean(np.abs(np.sum(current_P, axis=1) - degrees)):.6f}")
-    print(f"Écart absolu moyen des liens par bin : {np.mean(np.abs(np.bincount(flat_bin_assignments, weights=final_probs_flat, minlength=K) - observed_links_per_bin)):.4f}")
-    print(f"Gammas finaux : {np.round(gammas, 2)}")
-
-    return current_P, nodes
-    
 
 COMMUNITY_MAPPING = {
     'louvain': _appendLouvainCommunities,
@@ -1491,32 +1071,21 @@ COMMUNITY_MAPPING = {
     'significance': _appendSignificanceCommunities,
     "spatial_leiden" : _appendSpatialLeidenCommunities,
     "spatial_louvain" : _appendSpatialLouvainCommunities,
-    "spatial_louvain_old" : _appendSpatialLouvainCommunities_old,
-    "spatial_louvain_bined" : _appendSpatialLouvainCommunities_Bined,
     "spatial_leiden_scgravity" : _appendSpatialLeidenCommunities_scgravity,
     "spatial_louvain_scgravity" : _appendSpatialLouvainCommunities_scgravity,
     "spatial_leiden_wrdb" : _appendSpatialLeidenCommunities_WithReelDegreesBiais,
-    "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais,
-    #"spatial_louvain_radiation" : _appendSpatialLouvainCommunities_radiation,
-    "spatial_louvain_manualreg" : _appendSpatialLouvainCommunities_ManualReg,
-    "spatial_louvain_manualiter_0_20" : _appendSpatialLouvainCommunities_ManualIter_0_20,
-    "spatial_louvain_manualiter_0_50" : _appendSpatialLouvainCommunities_ManualIter_0_50,
-    "spatial_louvain_manualiter_0_80" : _appendSpatialLouvainCommunities_ManualIter_0_80
+    "spatial_louvain_wrdb" : _appendSpatialLouvainCommunities_WithReelDegreesBiais
 }
 
 
-def computeCommunityFeatures(G_train, algos="All", spatial_ref = "GT_pos"):
+def computeCommunityFeatures(G_train, algos="All"):
     print("\n--- Enrichissement du Graphe avec les Communautés ---")
     to_run = COMMUNITY_ALGOS if algos == "All" else algos
     
     for algo in to_run:
         if algo in COMMUNITY_MAPPING:
             print(f"Calcul des communautés via {algo}...")
-            if algo.startswith("spatial_"):
-                COMMUNITY_MAPPING[algo](G_train, pos_attr= spatial_ref)
-            else :
-                COMMUNITY_MAPPING[algo](G_train)
-                
+            COMMUNITY_MAPPING[algo](G_train)
         else:
             print(f"Attention : L'algorithme {algo} n'est pas reconnu.")
             
@@ -1670,132 +1239,11 @@ def _append_crosswalk_features(G_train, p, q, attr_name, dimensions=64):
     embeddings = nx.get_node_attributes(G_weighted, attr_name)
     nx.set_node_attributes(G_train, embeddings, attr_name)
 
-def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", NullModel_method = "ManualIter", temperature=0.5):
-    print(f"Calcul de SiNE custom (NullModel type ={NullModel_method})...")
-    start_skip = time.time()
-
-    A = nx.to_numpy_array(G_train)
-    
-    if NullModel_method == "ManualIter":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-        P_symetric = (P + P.T) / 2
-        R_matrix = A - P_symetric
-
-        asymmetry_sum = np.sum(np.abs(P - P_symetric))
-        max_diff = np.max(np.abs(P - P_symetric))
-
-        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial pour SiNEcustom ---")
-        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
-        print(f"Écart maximal ponctuel : {max_diff:.2e}")
-    elif NullModel_method == "ManualIter_Bined":
-        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr)
-        P_symetric = (P + P.T) / 2
-        R_matrix = A - P_symetric
-
-        asymmetry_sum = np.sum(np.abs(P - P_symetric))
-        max_diff = np.max(np.abs(P - P_symetric))
-
-        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial Bined pour SiNEcustom ---")
-        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
-        print(f"Écart maximal ponctuel : {max_diff:.2e}")
-
-    elif NullModel_method == "None":
-        nodes = list(G_train.nodes())
-        R_matrix = A
-
-    embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
-    
-    embeddings_dict = {}
-    for i, node_id in enumerate(nodes):
-        embeddings_dict[node_id] = embedding_matrix[i]
-
-    nx.set_node_attributes(G_train, embeddings_dict, attr_name)
-
-    end_skip = time.time()
-    SiNEcustom_duration = end_skip - start_skip
-    print(f"SiNEcustom terminé en {SiNEcustom_duration:.2f}s")
-    print(f"-> Succès : {embedding_matrix.shape[1]} dimensions ajoutées à l'attribut '{attr_name}' de chaque nœud.")
-    
-    return G_train
-
-def _append_SiNE(G_train, pos_attr="GT_pos", attr_name = "SiNE", NullModel_method = "ManualIter", temperature=0.5):
-    print(f"Calcul de SiNE standard (NullModel type ={NullModel_method})...")
-    start_skip = time.time()
-
-    A = nx.to_numpy_array(G_train)
-    
-    if NullModel_method == "ManualIter":
-        P, nodes = get_gravity_null_model_manual_iterative(G_train, pos_attr)
-        P_symetric = (P + P.T) / 2
-        R_matrix = A - P_symetric
-
-        asymmetry_sum = np.sum(np.abs(P - P_symetric))
-        max_diff = np.max(np.abs(P - P_symetric))
-
-        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial pour SiNEcustom ---")
-        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
-        print(f"Écart maximal ponctuel : {max_diff:.2e}")
-    elif NullModel_method == "ManualIter_Bined":
-        P, nodes = get_gravity_bined_null_model_iterative(G_train, pos_attr)
-        P_symetric = (P + P.T) / 2
-        R_matrix = A - P_symetric
-
-        asymmetry_sum = np.sum(np.abs(P - P_symetric))
-        max_diff = np.max(np.abs(P - P_symetric))
-
-        print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial Bined pour SiNEcustom ---")
-        print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
-        print(f"Écart maximal ponctuel : {max_diff:.2e}")
-    elif NullModel_method == "None":
-        nodes = list(G_train.nodes())
-        R_matrix = A
-
-    embedding_matrix = train_original_sine_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
-    
-    embeddings_dict = {}
-    for i, node_id in enumerate(nodes):
-        embeddings_dict[node_id] = embedding_matrix[i]
-
-    nx.set_node_attributes(G_train, embeddings_dict, attr_name)
-
-    end_skip = time.time()
-    SiNEcustom_duration = end_skip - start_skip
-    print(f"SiNE standard terminé en {SiNEcustom_duration:.2f}s")
-    print(f"-> Succès : {embedding_matrix.shape[1]} dimensions ajoutées à l'attribut '{attr_name}' de chaque nœud.")
-    
-    return G_train
-
-def _append_orthoModularity(G_train, attr_name ="orthoModulo_posEig" , emb_method = "PosEigenvals"):
-    print(f"Calcul de orthoModularity (emb_method type ={emb_method})...")
-    start_time = time.time()
-    commus_partitions, embeddings = run_decoupled_framework(G_train, max_global_iters=10, emb_method=emb_method)
-
-    embeddings_dict = {node: embeddings[i] for i, node in enumerate(G_train.nodes())}
-
-    nx.set_node_attributes(G_train, embeddings_dict, f"{attr_name}_emb")
-    nx.set_node_attributes(G_train, commus_partitions, f"{attr_name}_comu")
-    
-    _normalize_community_assignment(G_train, f"{attr_name}_comu")
-
-    end_time = time.time()
-    print(f"orthoModularity terminé en {end_time - start_time:.2f}s")
-
-    return G_train
-
-
     
 EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
-    'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
-    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
-    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5),
-    'SiNEcustom_spatial_bined' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
-    'SiNE': lambda G: _append_SiNE(G, attr_name="SiNE", NullModel_method="None", temperature=0.5),
-    'SiNE_spatial' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial", NullModel_method="ManualIter", temperature=0.5),
-    'SiNE_spatial_bined' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
-    'orthoModulo_posEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_posEig", emb_method="PosEigenvals"),
-    'orthoModulo_allEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_allEig", emb_method="AllEigenvals"),
+    'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk")
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):
@@ -2089,8 +1537,7 @@ def analyze_with_shap_tree(model, X_test, y_test, max_pos=2000, negative_ratio=1
     neg_indices = y_test[y_test == 0].index
     neg_sample = y_test.loc[neg_indices].sample(n=n_neg, random_state=42).index
     
-    #X_shap = X_test.loc[pos_sample.union(neg_sample)]
-    X_shap = pd.concat([X_test.loc[pos_sample], X_test.loc[neg_sample]])
+    X_shap = X_test.loc[pos_sample.union(neg_sample)]
     
     print(f"Calcul TreeExplainer : {len(X_shap)} échantillons au total.")
 
@@ -2359,249 +1806,6 @@ def plot_dominance_distribution(explainability_dataset, title="Distribution de l
     
     plt.show()
 
-def process_single_graph(iteration, i, features):
-    sbm_val = f"{i:.2f}"
-    pos_val = f"{1-i:.2f}"
-    G_name_base = f"artificial_graph_sbmv_4_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{iteration}"
-    G_name_full = f"artificial_graph_sbmv_4_AllBasicMetrics_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{iteration}"
-    
-    try:
-        # 1. Chargement des données d'entraînement
-        G_train, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name_full)
-        G = load_graphml_safe(f"graph_library/{G_name_base}.graphml") 
-        
-        if 'GroundTruth_JSON' in G.graph:
-            gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-            GT = {
-                'GT_sbm_matrix': np.array(gt_raw['GT_sbm_matrix']),
-                'GT_pos': np.array(gt_raw['GT_pos']),
-                'GT_sbm_id': np.array(gt_raw['GT_sbm_id']),
-            }
-        else:
-            print(f"[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph pour {G_name_base}")
-            return None
-
-        # 2. Injection des features
-        for df in [dataset_train, dataset_eval]:
-            if df is None:
-                continue
-            
-            n1 = df['u'].astype(int).values
-            n2 = df['v'].astype(int).values
-            
-            # Distance entre les nœuds (GT_pos_dist)
-            pos_n1 = GT['GT_pos'][n1]
-            pos_n2 = GT['GT_pos'][n2]
-            df['GT_pos_dist'] = np.sqrt(np.sum((pos_n1 - pos_n2) ** 2, axis=1))
-            
-            # Densité SBM (GT_sbm_density)
-            block_n1 = GT['GT_sbm_id'][n1]
-            block_n2 = GT['GT_sbm_id'][n2]
-            df['GT_sbm_density'] = GT['GT_sbm_matrix'][block_n1, block_n2]
-       
-        
-        target_col = 'target' 
-        X_eval, y_eval = dataset_eval[features], dataset_eval[target_col]
-        
-        # 4. Entraînement de XGBoost
-        _, model, _, _, _, _ = train_and_test_xgboost(dataset_train, features=features, plot=False)
-        
-        # 5. Analyse SHAP via TreeExplainer
-        shap_explanation = analyze_with_shap_tree(model, X_eval, y_eval)
-        
-        # 6. Extraction des valeurs absolues moyennes de SHAP
-        shap_df = pd.DataFrame(shap_explanation.values, columns=features)
-        
-        result_dict = {
-            'iteration': iteration,
-            'sbm_val': float(sbm_val)
-        }
-        
-        for feat in features:
-            result_dict[f"SHAP_{feat}"] = float(np.mean(np.abs(shap_df[feat])))
-        
-        return result_dict
-        
-    except Exception as e:
-        print(f"[ERROR] Échec sur le graphe {G_name_base} : {str(e)}")
-        return None
-        
-
-def computeShapValsGTforAllGraphs():
-
-    features_GT_proba = ['GT_proba']
-    features_GT_sbm = ['GT_sbm_density']
-    features_GT_pos = ['GT_pos_dist']
-    features_topologiques = ['pr_u', 'pr_v','ppr_u', 'ppr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v', 'katz_u', 'katz_v',
-                              'sp', 'jc', 'aa', 'cn','pa', 'ra']
-    features_commu_inferee = ['louvain_density', 'infomap_density', 'sbm_density','leiden_density',
-                          "surprise_density","significance_density", ]
-    features_embeddings = ["deepwalk_cos",  "deepwalk_dist","n2v_homophily_cos", "n2v_homophily_dist","crosswalk_cos", "crosswalk_dist"]
-    
-    
-    experiments = {
-        #"GT_absolue (proba)": features_GT_proba,
-        #"GT_sbm": features_GT_sbm,
-        #"GT_pos": features_GT_pos,
-        "Topologiques":features_topologiques,
-        "Communautés":features_commu_inferee,
-        "Embeddings":features_embeddings,
-    }
-    
-    #features_list = features_GT_sbm + features_GT_pos
-    features_list = features_embeddings + features_commu_inferee + features_topologiques
-    
-    n_cores = max(1, os.cpu_count() - 2)
-    print(f"Lancement de la parallélisation sur {n_cores} cœurs...")
-
-    tasks = [
-        (iteration, i)
-        for iteration in range(1, 11)
-        for i in np.arange(1.00, -0.10, -0.10)
-    ]
-
-    # Exécution parallèle
-    results = Parallel(n_jobs=n_cores, backend="loky")(
-        delayed(process_single_graph)(iteration, i, features_list) for iteration, i in tasks
-    )
-
-    # Nettoyage des résultats (on retire les éventuels "None" dus à des erreurs dans les workers)
-    rows_results = [r for r in results if r is not None]
-
-    # 7. Création et sauvegarde de la matrice globale des résultats individuels
-    df_results = pd.DataFrame(rows_results)
-    df_results.to_csv("outputs/results/00_detailed_shap_results_sbmv4_AllBasicMetrics.csv", index=False)
-    print("\n--- Matrice des résultats détaillés sauvegardée sous '00_detailed_shap_results_sbmv4_AllBasicMetrics.csv' ---")
-    print(df_results)
-
-
-def analyze_commus_metrics(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0.00, i_max = 1.00, nb_i=11, name_export_results="DATE"):
-    
-    features_GT_proba = ['GT_proba']
-    features_topologiques = ['pr_u', 'pr_v','ppr_u', 'ppr_v', 'lcc_u', 'lcc_v', 'and_u', 'and_v', 'dc_u', 'dc_v', 'katz_u', 'katz_v', 'sp', 'jc', 'aa', 'cn','pa', 'ra']
-    features_commu_inferee = ['louvain_density', 'infomap_density', 'sbm_density','leiden_density',
-                          "surprise_density","significance_density"]
-    features_embeddings = ["deepwalk_cos",  "deepwalk_dist","n2v_homophily_cos", "n2v_homophily_dist","crosswalk_cos", "crosswalk_dist"]
-    
-    experiments = {
-        "Max théorique (GT_proba)": features_GT_proba,
-        "Topologiques":features_topologiques,
-        "Communautés":features_commu_inferee,
-        "Embeddings":features_embeddings,
-        "Toutes les features": features_topologiques + features_commu_inferee + features_embeddings
-    }
-
-    all_results = []
-
-    tasks = [
-        (nb_iter, i) 
-        for nb_iter in range(1, nb_iterations + 1) 
-        for i in np.linspace(i_max, i_min, nb_i)
-    ]
-
-    cores_to_use = max(1, os.cpu_count() -2)
-
-    print(f"Lancement de la parallélisation sur {cores_to_use} coeurs pour {len(tasks)} tâches...")
-
-    # Exécution parallèle
-    results_nested = Parallel(n_jobs=cores_to_use)(
-        delayed(run_single_experiment_metrics)(nb_iter, i, spatial_ref, G_name_short, experiments) 
-        for nb_iter, i in tasks
-    )
-
-    # Aplatir la liste de listes
-    all_results = [item for sublist in results_nested for item in sublist]
-
-    all_results = pd.DataFrame(all_results)
-    
-    output_dir = "outputs/results"
-    os.makedirs(output_dir, exist_ok=True)
-    output_path = os.path.join(output_dir, f"00_perfs_AllMetrics_{G_name_short}_{nb_iterations}iter_{name_export_results}.csv")
-    all_results.to_csv(output_path, index=False)
-    print(f" Succès ! Fichier sauvegardé dans : {output_path}")
-    return all_results
-
-def run_single_experiment_metrics(nb_iter, i, spatial_ref, G_name_short, experiments):
-    """
-    Fonction exécutée par un cœur unique pour une valeur de i et une itération donnée.
-    """
-    sbm_val = f"{i:.2f}"
-    pos_val = f"{1-i:.2f}"
-    if spatial_ref == "GT_Pos" or spatial_ref == "GT_pos" : 
-        spatial_ref = ""
-    else :
-        spatial_ref = f"_{spatial_ref}"
-    G_name = f"{G_name_short}_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
-    G_name_long = f"{G_name_short}_AllBasicMetrics_{sbm_val.replace('.', '_')}_pos_{pos_val.replace('.', '_')}_{nb_iter}{spatial_ref}"
-    
-    G = load_graphml_safe(f"graph_library/{G_name}.graphml") 
- 
-
-    if 'P_matrix_JSON' in G.graph:
-        print("P_matrix trouvée.")
-        GT = {
-            'GT_proba': np.array(json.loads(G.graph['P_matrix_JSON']))
-        }
-    else :
-        print(f"[WARNING] Aucune Pmatrix trouvée dans G.graph pour {G_name}")
-        return None
-
-
-    # 1. Chargement des données d'entraînement
-    _, dataset_train, dataset_eval, _, _, _ = load_all_data_for_graph(G_name_long)
-
-    for df in [dataset_train, dataset_eval]:    
-        n1 = df['u'].astype(int).values
-        n2 = df['v'].astype(int).values
-        df['GT_proba'] = GT['GT_proba'][n1, n2]
-
-    local_results = []
-
-    for exp_name, feat_list in experiments.items():
-        missing = set(feat_list) - set(dataset_train.columns)
-        if missing:
-            print(f" Exp {exp_name} : colonnes manquantes {missing}. Skip.")
-            print(set(dataset_train.columns))
-            continue
-
-        print(f" Running: {exp_name} for SBM={i}")
-    
-        Params = {
-            'max_depth': 3,             # Faible profondeur pour éviter l'overfitting sur 2 variables
-            'learning_rate': 0.1,       # Compromis idéal vitesse/précision
-            'n_estimators': 1000,       # On met beaucoup, l'early stopping fera le reste
-            'subsample': 1.0,           # On garde 100% des lignes (plus stable pour peu de features)
-            'colsample_bytree': 1.0,    # On garde les 2 features à chaque split
-            'objective': 'binary:logistic', 
-            'tree_method': 'hist',      # Accélère l'entraînement sur de gros datasets
-            'reg_lambda': 1,            # Régularisation L2 pour stabiliser les poids
-            'n_jobs': 1                # Utilise 1 seul coeur, pour la parallélisation
-        }
-
-        stats_df, model, _, _, _, _ = train_and_test_xgboost(dataset_train, features=feat_list, parameters = Params, plot=False)
-
-        importances = model.feature_importances_
-        feat_imp_series = pd.Series(importances, index=feat_list).sort_values(ascending=False)
-            
-        # Évaluation sur le dataset de référence FIXE (Graphe SBM 1.0)
-        X_eval_fixed = dataset_eval[feat_list] 
-        stats_eval_df = get_performance_metrics(model, X_eval_fixed, dataset_eval["target"], "EXP_")
-        
-        local_results.append({
-            "G_name" : G_name,
-            "Ratio_SBM": i,
-            "Iter": nb_iter,
-            "Experiment": exp_name,
-            "AP_train": stats_df["Test_AP"].iloc[0],
-            "AUC-ROC_train": stats_df["Test_AUC-ROC"].iloc[0],
-            "AP_eval": stats_eval_df["EXP_AP"].iloc[0],
-            "AUC-ROC_eval": stats_eval_df["EXP_AUC-ROC"].iloc[0],
-            "Top_Feature": feat_imp_series.index[0], # On stocke la #1 pour analyse
-            "Top_Importance": feat_imp_series.iloc[0]
-        })
-
-    return local_results
-
 
 ########################################
 ## FONCTIONS UTILITAIRES DE LOAD SAVE ##
@@ -2714,18 +1918,6 @@ class GraphEncoder(json.JSONEncoder):
         if isinstance(obj, set):
             return list(obj)
         return super().default(obj)
-
-def load_graphml_safe(path, speak=False):
-    with open(path, 'r', encoding='utf-8') as f:
-        raw_data = f.read()
-
-    clean_data = html.unescape(raw_data)
-    G = nx.read_graphml(io.StringIO(clean_data))
-
-    if speak : 
-        print(f"✅ Graphe chargé : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-    
-    return G
 
 def save_graph(G, filename):
     base_path = Path(PROJECT_ROOT) if 'PROJECT_ROOT' in globals() else Path.cwd()

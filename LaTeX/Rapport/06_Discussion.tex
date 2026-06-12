@@ -1,0 +1,43 @@
+
+
+\section{Discussion, Conclusions et Perspectives Générales}
+\label{sec:discussion_conclusion}
+
+Cette section synthétise les contributions développées au cours de ce projet de recherche, analyse de manière critique sa portée et ses limites actuelles, et propose des axes de développement futurs.
+
+\subsection{Discussion synthétique des contributions}
+
+Le fil conducteur du projet reposait sur l'utilisation de la prédiction de liens comme outil d'analyse pour évaluer la qualité et l'indépendance de représentations de graphes. Les apports de ces travaux s'articulent autour de trois axes majeurs :
+
+\begin{enumerate}
+    \item \textbf{La maîtrise du benchmark de validation :} Avant d'analyser l'état de l'art, le développement d'un modèle génératif hybride (SBM-Spatial) a mis en lumière un verrou mathématique critique. Nous avons démontré théoriquement et numériquement que le simple mélange linéaire de deux matrices de probabilités biaise l'échantillonnage en faveur du modèle possédant la plus forte variance. L'alignement algorithmique des variances via l'optimisation du paramètre de dissuasion $\sigma^*$ a permis de concevoir un cadre de validation rigoureux, symétrique et exempt de biais de filiation.
+    \item \textbf{La mise en évidence du biais de colinéarité :} L'application du framework d'explicabilité additive inspiré de SHAP a validé notre démarche sur des variables parfaites ($\text{GT\_pos}$ et $\text{GT\_sbm}$). Cependant, face aux algorithmes de l'état de l'art, le framework a révélé une forte redondance informationnelle inter-paradigme (culminant à plus de $60\,\%$ de corrélation aux bornes du spectre). Ce phénomène de colinéarité induit un effet de masquage lors de l'apprentissage par arbres (\textit{XGBoost}), concentrant artificiellement l'importance SHAP vers un nombre restreint de descripteurs et floutant l'interprétabilité globale. De plus, le comportement des algorithmes classiques a confirmé un biais conceptuel : Louvain interprète la proximité géographique locale comme une structure communautaire, et inversement les algorithmes d'inférence de positions latentes type \textit{embeddings} détectent les structures communautaires comme de la proximité géographique.
+    \item \textbf{L'efficacité du débiaisage par modèle nul :} Pour répondre à cette limite, les méthodes d'inférence décorrélée développées (Louvain spatialement décorrélé et SiNE décorrélée via matrice de résidus) ont prouvé leur capacité à purger efficacement le signal de sa composante géométrique. L'effondrement des corrélations avec $\text{GT\_pos}$ (Figures \ref{fig6} et \ref{fig8}) valide l'orthogonalisation des descripteurs. En termes de performance applicative, cette séparation des signaux s'est avérée particulièrement intéressante dans les zones de forte incertitude ($\alpha = 0.5$ pour le modèle par somme) et sur l'ensemble du spectre pour les structures contrastées (modèle par exposant), confirmant qu'isoler des facteurs d'influence uniques permet au méta-classificateur de mieux reconstruire la topologie globale.
+\end{enumerate}
+
+\subsection{Limites actuelles et verrous technologiques}
+
+Malgré des résultats encourageants, plusieurs limites doivent être soulignées. En premier lieu, la validation des performances s'est concentrée sur des structures non corrigées des degrés ($\text{non-DC}$). Bien que les formulations mathématiques intégrant l'hétérogénéité des degrés ($\text{DC-SBM}$ et $\text{DC-Spatial}$) aient été implémentées et formalisées dans ce rapport, leur évaluation au sein du framework d'explicabilité reste incomplète, constituant une zone d'ombre sur la robustesse des dynamiques observées sur une \textit{Ground Truth} combinant distance et degré des noeuds.
+
+Deuxièmement, l'évaluation s'est focalisée sur des réseaux synthétiques contrôlés. Si ce choix était indispensable pour valider la fidélité de la décomposition face à une vérité terrain connue, la robustesse de la décorrélation face au bruit, à l'incomplétude ou aux topologies complexes propres aux graphes réels reste encore à valider.
+
+\subsection{Perspectives de recherche et développements futurs}
+
+Les pistes explorées au cours de ce projet ouvrent de nouveaux questionnements. Voici les principales perspectives et pistes de recherche qu'il paraît intéressant de poursuivre : 
+
+\subsubsection{Passage à l'échelle et validation sur graphes réels}
+C'est la suite logique de ce travail, qui réside dans la conduite d'une expérimentation sur des jeux de données réels à grande échelle. Les analyses isolées menées en fin de projet devront être généralisées à des réseaux complexes issus de domaines variés, tels que les réseaux de transport (où la contrainte spatiale est forte), les réseaux de citations ou les réseaux sociaux géolocalisés. Il s'agira de vérifier si les modèles nuls gravitaires maintiennent leur capacité de décorrélation face à des structures empiriques sur lesquelles les facteurs influençant la création de liens sont multiples (plus que 2 paradigmes).
+
+\subsubsection{Optimisation algorithmique et ingénierie logicielle}
+D'un point de vue informatique, notre implémentation personnalisée de l'algorithme SiNE ($\text{SiNEcustom}$), codée en Python pour les besoins de cette preuve de concept, présente des limites de montée en charge. Le calcul des fonctions de perte avec contraintes d'orthogonalité sur des matrices de résidus signés s'avère gourmand en ressources. 
+Une réécriture des modules critiques en C++, ou une intégration au sein de frameworks de calcul parallélisé sur GPU (tels que PyTorch ou JAX), s'avère indispensable pour réduire les temps de calcul, optimiser la convergence du gradient et garantir la scalabilité du modèle sur des graphes de plusieurs millions de nœuds.
+
+\subsubsection{Généralisation théorique et Équité (\textit{Fairness})}
+Enfin, sur le plan théorique, le principe de décorrélation par soustraction de modèle nul formalisé dans ce stage ne se limite pas à la variable géographique. Une perspective majeure consiste à transposer cette méthodologie pour débiaiser les plongements ou les partitions vis-à-vis d'autres propriétés structurelles (comme le degré des nœuds pour éviter la sur-représentation des \textit{hubs}) ou vis-à-vis d'attributs temporels, ou encore d'attributs externes sensibles. Ce cadre algorithmique offre par exemple des connexions prometteuses avec le domaine de l'équité en apprentissage sur graphes (\textit{Fair Graph Learning}), où l'objectif est d'extraire des représentations vectorielles rigoureusement orthogonales à des variables protégées (genre, ethnie, données privées) afin de garantir des prédictions non biaisées. De même, l'injection d'un modèle nul communautaire de type \textit{Stochastic Block Model} (\text{SBM}), ouvrirait la voie à une extraction des résidus géométriques, rigoureusement affranchie des effets de regroupement en blocs.
+
+
+\subsection{Conclusion du stage}
+
+Ce stage de fin d'études, mené au sein de l'équipe DM2L du LIRIS, a permis de poser les bases d'une approche d'explicabilité structurelle et globale pour l'analyse de réseaux. En s'éloignant des explications locales traditionnelles par sous-graphes, ces travaux démontrent qu'il est possible de quantifier finement les facteurs d'influence d'un graphe en combinant la puissance prédictive de la méthode \textit{XGBoost} et la théorie des jeux coopératifs. 
+
+L'introduction de méthodes d'inférence décorrélées résout un verrou critique de colinéarité, ouvrant la voie à des modèles d'apprentissage de représentations sur graphes plus transparents, plus robustes et plus interprétables.
