@@ -59,7 +59,8 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['orthoModulo_posEig', 'orthoModulo_allEig']
+EMBEDDINGS = ['SiNEcustom_spatial', 'deepwalk','SiNEcustom_spatial_bined',]
+#['orthoModulo_posEig', 'orthoModulo_allEig']
 #['n2v_homophily', 'deepwalk', 'crosswalk']
 """
 [
@@ -70,7 +71,8 @@ EMBEDDINGS = ['orthoModulo_posEig', 'orthoModulo_allEig']
 ]
 """
 
-COMMUNITY_ALGOS = [] #['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
+COMMUNITY_ALGOS = ['louvain', "spatial_louvain", 'spatial_louvain_bined']
+#['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 """
 [
     #"spatial_leiden", "spatial_leiden_scgravity", "spatial_leiden_wrdb", 
@@ -1191,7 +1193,11 @@ def get_gravity_null_model_manual_iterative(G, pos_attr='pos', tol=0.01, max_ite
     
     # Matrice de distance (N, N)
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    if len(pos_array.shape) == 1 or (len(pos_array.shape) == 2 and pos_array.shape[1] == 1):
+        # Cas 1D : Différence absolue directe
+        dist_matrix = np.abs(pos_array[:, np.newaxis] - pos_array[np.newaxis, :])
+    else:
+        dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
     
     #eucl = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
     #R = np.linalg.norm(pos_array[0]) 
@@ -1377,7 +1383,11 @@ def get_gravity_bined_null_model_iterative(G, pos_attr='pos', tol=0.01, max_iter
     
     # 1. Distances
     pos_array = np.array([G.nodes[u][pos_attr] for u in nodes])
-    dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
+    if len(pos_array.shape) == 1 or (len(pos_array.shape) == 2 and pos_array.shape[1] == 1):
+        # Cas 1D : Différence absolue directe
+        dist_matrix = np.abs(pos_array[:, np.newaxis] - pos_array[np.newaxis, :])
+    else:
+        dist_matrix = np.linalg.norm(pos_array[:, np.newaxis] - pos_array[np.newaxis, :], axis=2)
 
     num_pairs = n * (n - 1) // 2
     K = int(np.clip(num_pairs // 2000, 10, 50))
@@ -1768,7 +1778,7 @@ def _append_SiNE(G_train, pos_attr="GT_pos", attr_name = "SiNE", NullModel_metho
 def _append_orthoModularity(G_train, attr_name ="orthoModulo_posEig" , emb_method = "PosEigenvals"):
     print(f"Calcul de orthoModularity (emb_method type ={emb_method})...")
     start_time = time.time()
-    commus_partitions, embeddings = run_decoupled_framework(G_train, max_global_iters=10, emb_method=emb_method)
+    commus_partitions, embeddings = run_decoupled_framework(G_train, max_global_iters=100, emb_method=emb_method)
 
     embeddings_dict = {node: embeddings[i] for i, node in enumerate(G_train.nodes())}
 
@@ -1788,12 +1798,12 @@ EMBEDDING_MAPPING = {
     'n2v_homophily': lambda G: _append_node2vec_features(G, p=2, q=0.5, attr_name="n2v_homophily"),
     'deepwalk': lambda G: _append_node2vec_features(G, p=1, q=1, attr_name="deepwalk"),
     'crosswalk': lambda G: _append_crosswalk_features(G, p=1, q=1, attr_name="crosswalk"),
-    'SiNEcustom': lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
-    'SiNEcustom_spatial' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5),
-    'SiNEcustom_spatial_bined' : lambda G: _append_SiNEcustom(G, attr_name="SiNEcustom_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
-    'SiNE': lambda G: _append_SiNE(G, attr_name="SiNE", NullModel_method="None", temperature=0.5),
-    'SiNE_spatial' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial", NullModel_method="ManualIter", temperature=0.5),
-    'SiNE_spatial_bined' : lambda G: _append_SiNE(G, attr_name="SiNE_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
+    'SiNEcustom': lambda G, pos_attr="GT_pos": _append_SiNEcustom(G, pos_attr, attr_name="SiNEcustom", NullModel_method="None", temperature=0.5),
+    'SiNEcustom_spatial' : lambda G, pos_attr="GT_pos": _append_SiNEcustom(G, pos_attr, attr_name="SiNEcustom_spatial", NullModel_method="ManualIter", temperature=0.5),
+    'SiNEcustom_spatial_bined' : lambda G, pos_attr="GT_pos": _append_SiNEcustom(G, pos_attr, attr_name="SiNEcustom_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
+    'SiNE': lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE", NullModel_method="None", temperature=0.5),
+    'SiNE_spatial' : lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE_spatial", NullModel_method="ManualIter", temperature=0.5),
+    'SiNE_spatial_bined' : lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
     'orthoModulo_posEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_posEig", emb_method="PosEigenvals"),
     'orthoModulo_allEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_allEig", emb_method="AllEigenvals"),
 }
@@ -1826,15 +1836,19 @@ def apply_quantile_binning(df, col_name, num_bins=10):
         duplicates='drop'
     )
     return df
+    
 
-def computeDistanceFeatures(G_train, embeddings="All"):
+def computeDistanceFeatures(G_train, embeddings="All", spatial_ref="GT_pos"):
     to_run = EMBEDDINGS if embeddings == "All" else embeddings
     print("\n--- Enrichissement du Graphe avec les Embeddings ---")
 
     for emb in to_run:
         if emb in EMBEDDING_MAPPING:
             print(f"Calcul des embeddings via {emb}...")
-            EMBEDDING_MAPPING[emb](G_train)
+            if emb.endswith("_spatial") or emb.endswith("_spatial_bined"):
+                EMBEDDING_MAPPING[emb](G_train, pos_attr=spatial_ref)
+            else:
+                EMBEDDING_MAPPING[emb](G_train)
         else:
             print(f"Attention : L'algorithme {emb} n'est pas reconnu.")
     return G_train

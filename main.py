@@ -76,38 +76,29 @@ def save_as_graphml(G_nx, filename="mon_graphe.graphml", folder="graph_library")
 
 if __name__ == "__main__":
 
-    path = "graph_library/benchmark_graphes_reels/reel_spatial_Airports.graphml"
-    G = load_graphml_safe(path)
-    G_name = "reel_Airports"
-
-    start_time = time.time()
-    gp.execute(G, G_name)      
-    end_time = time.time()
-    duration = end_time - start_time
-    print(f"FINI ! duration = {duration}. Zboobs !")
-
-    
-    """
     execution_stats = []
-    for nbiter in range(3,31) : 
-        for sbm_ratio in np.arange(0.00, 1.10, 0.10):
+
+   
+    for nbiter in range(1,2) : 
+        for sbm_ratio in np.arange(0.50, 1.10, 0.10):
             
             G_name = f"artificial_graph_sbmv_4_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
-            G_name_bis = f"artificial_graph_sbmv_4_comuAndEmb2_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            G_name_bis = f"artificial_graph_sbmv_4_orthoModulo_{sbm_ratio:.2f}_pos_{1-sbm_ratio:.2f}_{nbiter}".replace('.', '_')
+            
             print("######################################")
             print(f"#### graph {G_name} :  ####")
             print("######################################")
+            print (f"G bname bis : {G_name_bis}")
             
             path = f"graph_library/{G_name}.graphml"
-            
             try:
                 G = load_graphml_safe(path)
                 print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
             except Exception as e:
                 print(f"Erreur lors du chargement de {path} : {e}")
-            
+
             start_time = time.time()
-            gp.compute_commus(G, G_name_bis, "GT_pos", computeEmb=True)      
+            gp.compute_commus(G, G_name_bis, "pos", computeEmb=True)      
             end_time = time.time()
             duration = end_time - start_time
     
@@ -121,91 +112,22 @@ if __name__ == "__main__":
                 })
                 
             print(f"⏱️ Terminé en {duration:.2f} secondes.")
-
+    
     df = pd.DataFrame(execution_stats)
     print("\n" + "="*50)
     print("📊 RÉSUMÉ DES STATISTIQUES D'EXÉCUTION")
     print("="*50)
     print(df.to_string(index=False))
-    
+    """
     
     start_time = time.time()
-    all_results = gp.analyze_commus(G_name_short = "artificial_graph_sbmv_4_comuAndEmb2", nb_iterations=11, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
+    all_results = gp.analyze_commus(G_name_short = "artificial_remy", nb_iterations=1, spatial_ref = "GT_pos", i_min = 0.00, i_max = 1.00, nb_i=11, name_export_results="GT_pos")
     end_time = time.time()
     duration = end_time - start_time
     print("\n" + "="*50)
     print("📊 TEMPS D'EXEC POUR ANALYSIS PAS HALAL :")
     print("="*50)
     print(f"{duration} secs")
-    """
     
-   
-    #"fullerene_structures_C1500",
-    #"urban_streets_savannah",
-    #"urban_streets_seoul",
-    #"urban_streets_washington",
-    #"facebook_organizations_S1",
-    #"facebook_organizations_S2",
-    
-    
-    G_names_list = [
-        #"Airports",
-        "eu_airlines",
-        "faa_routes"
-    ]
 
-    #gp.analyze_commus_greels(G_name_short="G_reels", G_names_list=G_names_list, nb_iterations=10,  spatial_ref = "GT_pos", name_export_results="2026_06_05")
-            
-    """
-    for iteration in range (0,10):
-        for G_name in G_names_list : 
-            G_name_bis = f"{G_name}_test_{iteration}"
-            print("######################################")
-            print(f"#### graph {G_name_bis} :  ####")
-            print("######################################")
-
-            path = f"graph_library/benchmark_graphes_reels/reel_spatial_{G_name}"
-            
-            try:
-                G = load_graphml_safe(f"{path}", startswith = True)
-                print(f"Graphe chargé avec succès : {G.number_of_nodes()} nœuds et {G.number_of_edges()} liens.")
-            except Exception as e:
-                print(f"Erreur lors du chargement de {path} : {e}")
-    
-            print(f"Validation 1er nœud : {list(G.nodes(data=True))[0]}")
-    
-            for n, data in G.nodes(data=True):
-                for attr in ['GT_pos']:
-                    if attr in data and isinstance(data[attr], str):
-                        try:
-                            data[attr] = np.array(ast.literal_eval(data[attr]))
-                        except (ValueError, SyntaxError):
-                            continue
-            
-            if 'GroundTruth_JSON' in G.graph:
-                print(f"[INIT] Extraction de la GT GroundTruth pour {G_name}...")
-                gt_raw = json.loads(G.graph['GroundTruth_JSON'])
-                
-                GT = {
-                    'GT_pos': np.array(gt_raw['GT_pos']),
-                     }
-            else:
-                print("[WARNING] Aucune GroundTruth_JSON trouvée dans G.graph")
-                GT = None
-    
-            if GT is not None and 'GT_pos' in GT:
-                for i, node_id in enumerate(G.nodes()):
-                    G.nodes[node_id]['GT_pos'] = GT['GT_pos'][i]
-    
-            first_node = next(iter(G.nodes))
-            print(G.nodes[first_node])
-
-            start_time = time.time()
-            gp.compute_commus_greels(G, G_name_bis, "GT_pos", computeEmb = True)      
-            end_time = time.time()
-            duration = end_time - start_time
-                
-            print(f"⏱️ Terminé en {duration:.2f} secondes.")
-
-            """
          

@@ -351,8 +351,8 @@ def compute_commus(G, G_name, spatial_ref = "GT_pos", computeEmb=False):
     G_train_with_communities = computeCommunityFeatures(G_train, spatial_ref=spatial_ref)
     G_kept_with_communities = computeCommunityFeatures(G_kept, spatial_ref=spatial_ref)
     if computeEmb:
-        G_train_with_communities = computeDistanceFeatures(G_train)
-        G_kept_with_communities = computeDistanceFeatures(G_kept)
+        G_train_with_communities = computeDistanceFeatures(G_train, spatial_ref=spatial_ref)
+        G_kept_with_communities = computeDistanceFeatures(G_kept, spatial_ref=spatial_ref)
         
 
     print("Save : graph pour exploration commus")
@@ -377,6 +377,7 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
                        #'GT_spatial_deg_product', 
                     #'GT_spatial_gravity_log', 'GT_degrees_spatial_u','GT_degrees_spatial_v'
                     ]
+    features_GT_sbm = ['GT_sbm_density']
     features_commu_inferee_normal = ["louvain_density"]
     features_commu_inferee_spatial_based_manual_iter = ["spatial_louvain_density"]
     features_commu_inferee_spatial_based_manual_iter_old = ["spatial_louvain_old_density"]
@@ -409,6 +410,7 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
         #"Inferred_Commu_spatial_scgravity": features_commu_inferee_spatial_based_scgravity,
         #"Inferred_Commu_spatial_wrdb": features_commu_inferee_spatial_based_wrdb,
         #"GT_proba": features_GT_proba,
+        "GT_sbm": features_GT_sbm,
         "GT_pos": features_GT_pos,
         "GT_pos + Inferred_Commu normal": features_GT_pos + features_commu_inferee_normal,
         "GT_pos + Inferred_Commu spatial manuel iter": features_GT_pos + features_commu_inferee_spatial_based_manual_iter,
@@ -448,7 +450,8 @@ def analyze_commus(G_name_short, nb_iterations, spatial_ref = "GT_pos", i_min =0
     tasks = [
         (nb_iter, i) 
         for nb_iter in range(1, nb_iterations + 1) 
-        for i in np.linspace(i_max, i_min, nb_i)
+        #for i in np.linspace(i_max, i_min, nb_i)
+        for i in [0.5, 0.25, 0.17, 0.12, 0.1, 1.0, 0.8, 0.67, 0.57, 0.51, 0.0]
     ]
 
     cores_to_use = max(1, os.cpu_count() -2)
