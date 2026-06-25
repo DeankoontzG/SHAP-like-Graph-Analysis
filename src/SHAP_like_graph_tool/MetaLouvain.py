@@ -77,7 +77,7 @@ class Status(object):
 
     """
     def init(self, graph, weight, null_model,part=None):
-        #Initialize the status of a graph with every node in one community
+        """Initialize the status of a graph with every node in one community"""
         count = 0
         self.node2com = {}
         self.com2nodes = {}
@@ -122,9 +122,8 @@ class Status(object):
         #
         #         self.internals[com] = self.internals.get(com, 0) + inc_edges
         #         self.expected[com] = self.expected.get(com, 0) + inc_expected
+    """
 
-     """
-    
     def init(self, graph, weight, null_model, part=None):
         """Initialize the status of a graph with every node in one community"""
         count = 0
@@ -328,7 +327,17 @@ def induced_graph(new_node2com, graph, weight="weight"):
 
     return ret
 
-def induced_null_model(new_node2com, null_model):
+def induced_null_model(new_node2com, null_model, sample_threshold=None, sample_size=20000, random_state=None):
+    """Aggregate a pairwise null model after graph coarsening.
+
+    The induced null model between two meta-nodes is the sum of the original
+    expected weights over every original node pair represented by those
+    meta-nodes. Earlier versions used an unscaled sample for large blocks, which
+    made expected masses collapse by orders of magnitude after coarsening.
+    Exact aggregation is the default because the Louvain objective is very
+    sensitive to this quantity.
+    """
+    rng = random.Random(random_state)
 
     new_null_model={}
     #ret = nx.Graph()
@@ -340,25 +349,114 @@ def induced_null_model(new_node2com, null_model):
     #print("new level coms: "+str(len(new_com2nodes)))
 
     for com1,com2 in itertools.combinations_with_replacement(new_com2nodes.keys(),2):
-        len_com1=len(new_com2nodes[com1])
-        len_com2=len(new_com2nodes[com2])
-        nb_combinations=len_com1*len_com2/2
-        if nb_combinations>100000:
-            requested_size = max([len_com1, len_com2]) * 20
-            sample_size = min([len_com1, len_com2, requested_size])
-            
-            sample=zip(random.sample(new_com2nodes[com1],sample_size),random.sample(new_com2nodes[com2],sample_size))
+        nodes1=list(new_com2nodes[com1])
+        nodes2=list(new_com2nodes[com2])
+        len_com1=len(nodes1)
+        len_com2=len(nodes2)
+        if com1==com2:
+            total_pairs=len_com1 * (len_com1 + 1) // 2
+        else:
+            total_pairs=len_com1 * len_com2
+
+        if sample_threshold is not None and total_pairs > sample_threshold:
+            current_sample_size=min(int(sample_size), total_pairs)
+            if com1==com2:
+                sampled_pairs=[]
+                while len(sampled_pairs) < current_sample_size:
+                    u=rng.choice(nodes1)
+                    v=rng.choice(nodes1)
+                    sampled_pairs.append(tuple(sorted((u, v), key=repr)))
+            else:
+                sampled_pairs=[
+                    (rng.choice(nodes1), rng.choice(nodes2))
+                    for _ in range(current_sample_size)
+                ]
+            average_expected=sum(null_model(u,v) for u,v in sampled_pairs) / current_sample_size
+            new_null_model[frozenset([com1,com2])]=average_expected * total_pairs
         else:
             if com1==com2:
-                sample=itertools.combinations_with_replacement(new_com2nodes[com1],2)
+                pairs=itertools.combinations_with_replacement(nodes1,2)
             else:
-                sample=itertools.product(new_com2nodes[com1],new_com2nodes[com2])
-
-        new_null_model[frozenset([com1,com2])]=sum([null_model(u,v) for u,v in sample])
+                pairs=itertools.product(nodes1,nodes2)
+            new_null_model[frozenset([com1,com2])]=sum(null_model(u,v) for u,v in pairs)
 
     update_null_model= lambda u,v: new_null_model[frozenset([u,v])]
     #print(new_null_model)
     return update_null_model
+
+
+def standardized_residual_louvain_inputs(G, null_model, weight="weight", eps=1e-9, std_weight="std_residual_weight"):
+    """Build inputs for standardized-residual modularity.
+
+    This transforms the objective
+
+        sum_{i<j same community} (A_ij - P_ij) / sqrt(P_ij * (1 - P_ij))
+
+    into the same observed-minus-null form optimized by ``best_partition``:
+    observed edges get weight ``A_ij / sigma_ij`` and the null model returns
+    ``P_ij / sigma_ij``. Here ``sigma_ij = sqrt(P_ij * (1 - P_ij))`` with
+    clipping for numerical stability.
+
+    Returns
+    -------
+    weighted_graph, standardized_null_model, diagnostics
+    """
+    weighted_graph = nx.Graph()
+    weighted_graph.add_nodes_from(G.nodes(data=True))
+    transformed_values = []
+
+    def transformed_null_model(u, v):
+        if u == v:
+            return 0.0
+        p = float(null_model(u, v))
+        p = min(1.0 - eps, max(eps, p))
+        sigma = np.sqrt(p * (1.0 - p))
+        return float(p / sigma)
+
+    for u, v, datas in G.edges(data=True):
+        p = float(null_model(u, v))
+        p = min(1.0 - eps, max(eps, p))
+        sigma = np.sqrt(p * (1.0 - p))
+        edge_weight = datas.get(weight, 1)
+        transformed_weight = float(edge_weight / sigma)
+        weighted_graph.add_edge(u, v, **{std_weight: transformed_weight})
+        transformed_values.append(transformed_weight)
+
+    diagnostics = {
+        "std_weight": std_weight,
+        "eps": float(eps),
+        "n_edges": G.number_of_edges(),
+        "mean_observed_weight": float(np.mean(transformed_values)) if transformed_values else 0.0,
+        "max_observed_weight": float(np.max(transformed_values)) if transformed_values else 0.0,
+    }
+    return weighted_graph, transformed_null_model, diagnostics
+
+
+def standardized_residual_best_partition(
+        graph,
+        null_model,
+        partition=None,
+        weight='weight',
+        resolution=1.,
+        randomize=None,
+        random_state=None,
+        eps=1e-9):
+    """Run Louvain on standardized residuals of a supplied null model."""
+    weighted_graph, standardized_null_model, _ = standardized_residual_louvain_inputs(
+        graph,
+        null_model,
+        weight=weight,
+        eps=eps,
+    )
+    return best_partition(
+        weighted_graph,
+        partition=partition,
+        weight="std_residual_weight",
+        resolution=resolution,
+        randomize=randomize,
+        random_state=random_state,
+        null_model=standardized_null_model,
+    )
 
 
 def __renumber(dictionary):
