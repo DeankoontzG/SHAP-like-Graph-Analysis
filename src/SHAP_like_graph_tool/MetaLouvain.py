@@ -75,9 +75,9 @@ class Status(object):
         new_status.total_weight = self.total_weight
 
 
-
+    """
     def init(self, graph, weight, null_model,part=None):
-        """Initialize the status of a graph with every node in one community"""
+        #Initialize the status of a graph with every node in one community
         count = 0
         self.node2com = {}
         self.com2nodes = {}
@@ -123,6 +123,58 @@ class Status(object):
         #         self.internals[com] = self.internals.get(com, 0) + inc_edges
         #         self.expected[com] = self.expected.get(com, 0) + inc_expected
 
+     """
+    
+    def init(self, graph, weight, null_model, part=None):
+        """Initialize the status of a graph with every node in one community"""
+        count = 0
+        self.node2com = {}
+        self.com2nodes = {}
+        self.total_weight = 0
+        self.expected = {}
+        self.internals = {}
+        self.total_weight = graph.size(weight=weight)
+        
+        if part is None:
+            # --- CAS CLASSIQUE : Initialisation en Singletons ---
+            for node in graph.nodes():
+                self.node2com[node] = count
+                self.expected[count] = 0
+                edge_data = graph.get_edge_data(node, node, default={weight: 0})
+
+                self.internals[count] = edge_data.get(weight, 1)
+                self.expected[count] = null_model(node, node)
+                count += 1
+            for node, com in self.node2com.items():
+                self.com2nodes.setdefault(com, set()).add(node)
+        else:
+            # --- CAS WARM-START : Initialisation guidée décommentée et corrigée ---
+            self.node2com = part.copy() # Sécurité de copie
+            for node, com in self.node2com.items():
+                self.com2nodes.setdefault(com, set()).add(node)
+            
+            # Recalcul des internes (edges) et des attendus (null model) pour chaque communauté
+            for node in graph.nodes():
+                com = self.node2com[node]
+                
+                # Calcul des arêtes internes portées par le nœud vers sa communauté
+                # (On réutilise l'équivalent de count_edges_in_com_for_node de façon intégrée)
+                inc_edges = 0.
+                if node in graph:
+                    for neighbor, datas in graph[node].items():
+                        if self.node2com.get(neighbor) == com:
+                            edge_weight = datas.get(weight, 1)
+                            if neighbor == node:
+                                inc_edges += float(edge_weight)
+                            else:
+                                inc_edges += float(edge_weight) / 2.
+                                
+                # Calcul de la masse attendue du nœud dans sa communauté selon ton null model
+                inc_expected = count_expected_in_com_for_node(self.com2nodes, graph, node, com, null_model)
+                
+                # Agrégation dans les structures globales du statut
+                self.internals[com] = self.internals.get(com, 0.) + inc_edges
+                self.expected[com] = self.expected.get(com, 0.) + inc_expected
 
 def check_random_state(seed):
     """Turn seed into a np.random.RandomState instance.

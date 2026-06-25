@@ -59,8 +59,8 @@ import inspect
 CURRENT_FILE_PATH = os.path.abspath(__file__)
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_FILE_PATH)))
 
-EMBEDDINGS = ['SiNEcustom_spatial', 'deepwalk','SiNEcustom_spatial_bined',]
-#['orthoModulo_posEig', 'orthoModulo_allEig']
+EMBEDDINGS = ['orthoModulo_posEig', 'orthoModulo_posEig_nonDC', "orthoModulo_baseline", "deepwalk"]
+#['SiNEcustom_spatial', 'deepwalk','SiNEcustom_spatial_bined',]
 #['n2v_homophily', 'deepwalk', 'crosswalk']
 """
 [
@@ -71,7 +71,8 @@ EMBEDDINGS = ['SiNEcustom_spatial', 'deepwalk','SiNEcustom_spatial_bined',]
 ]
 """
 
-COMMUNITY_ALGOS = ['louvain', "spatial_louvain", 'spatial_louvain_bined']
+COMMUNITY_ALGOS = []
+#['louvain', "spatial_louvain", 'spatial_louvain_bined']
 #['louvain', 'infomap', 'sbm', 'leiden', 'surprise', 'significance']
 """
 [
@@ -201,7 +202,21 @@ def _extract_pair_features(G_train, u, v, densities):
         #features[f'same_{algo}'] = 1 if id_u == id_v else 0
 
     for emb in EMBEDDINGS:
-        if emb in nu and emb in nv:
+        if emb.startswith('orthoModulo'):
+            vec_u = nu[f"{emb}_emb"].reshape(1, -1)
+            vec_v = nv[f"{emb}_emb"].reshape(1, -1)
+            features[f'{emb}_dist'] = np.linalg.norm(vec_u - vec_v)
+
+            id_u = nu.get(f'{emb}_comu')
+            id_v = nv.get(f'{emb}_comu')
+            if id_u is None or id_v is None:
+                print(f"ALERTE : Noeud u={u} ou v={v} a un ID None pour {emb}_comu !")
+                print(f"DEBUG: Attr cherché: {emb}_comu | Présents dans nu: {list(nu.keys())}")
+            else:
+                pair = tuple(sorted((id_u, id_v)))
+                features[f'{emb}_density'] = densities[f"{emb}"].get(pair, 0)
+
+        elif emb in nu and emb in nv:
             vec_u = nu[emb].reshape(1, -1)
             vec_v = nv[emb].reshape(1, -1)
             hadamard_prod = vec_u * vec_v
@@ -1532,21 +1547,33 @@ def computeCommunityFeatures(G_train, algos="All", spatial_ref = "GT_pos"):
             
     return G_train
 
+
 def prepare_all_densities(G_train):
     """
-    Pré-calcule les densités de blocs pour tous les algorithmes.
+    Pré-calcule les densités de blocs pour tous les algorithmes et embeddings concernés.
     """
     all_densities = {}
+    targets = []
     
-    for algo in COMMUNITY_ALGOS:        
-        attr_name = f"{algo}_id"
+    for algo in COMMUNITY_ALGOS:
+        targets.append((algo, f"{algo}_id"))
+        
+    for emb in EMBEDDINGS:
+        if emb.startswith('orthoModulo'):
+            targets.append((emb, f"{emb}_comu"))
+            
+    for key, attr_name in targets:
         node_to_block = nx.get_node_attributes(G_train, attr_name)
+        
+        # Si le graphe n'a pas cet attribut, on évite un crash
+        if not node_to_block:
+            continue
         
         # 1. Compter les membres par bloc
         block_sizes = pd.Series(node_to_block).value_counts().to_dict()
         blocks = list(block_sizes.keys())
         
-        # 2. Compter les liens réels entre blocs (uniquement sur le triangle supérieur)
+        # 2. Compter les liens réels entre blocs (triangle supérieur)
         counts = {(b1, b2): 0 for i, b1 in enumerate(blocks) for b2 in blocks[i:]}
         
         for u, v in G_train.edges():
@@ -1556,18 +1583,18 @@ def prepare_all_densities(G_train):
                 if pair in counts:
                     counts[pair] += 1
         
-        # 3. Calculer les densités (Lien Réels / Liens Possibles)
+        # 3. Calculer les densités
         algo_densities = {}
         for (b1, b2), real_count in counts.items():
             n1, n2 = block_sizes[b1], block_sizes[b2]
             if b1 == b2:
-                possible = (n1 * (n1 - 1)) / 2  # Combinaisons intra
+                possible = (n1 * (n1 - 1)) / 2  # Intra
             else:
-                possible = n1 * n2              # Combinaisons inter
+                possible = n1 * n2              # Inter
             
             algo_densities[(b1, b2)] = real_count / possible if possible > 0 else 0
             
-        all_densities[algo] = algo_densities
+        all_densities[key] = algo_densities
         
     return all_densities
 
@@ -1575,7 +1602,7 @@ def prepare_all_densities(G_train):
 ## FONCTIONS POUR INFERENCE D'EMBEDDINGS ##
 ###########################################
 
-def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
+def _append_node2vec_features(G_train, p, q, attr_name, dimensions=64):
     """
     Génère les embeddings Node2Vec et retourne un dictionnaire {node_id: vector}
     """
@@ -1603,7 +1630,13 @@ def _append_node2vec_features(G_train, p, q, attr_name,dimensions=64):
         model = node2vec.fit(window=10, min_count=1, batch_words=1000, size=dimensions, workers=cores)
     
     # On récupère les vecteurs dans un dictionnaire
-    embeddings = {node: model.wv[str(node)] for node in G_train.nodes()}
+    embeddings = {}
+    for node in G_train.nodes():
+        try:
+            embeddings[node] = model.wv[node]
+        except KeyError:
+            embeddings[node] = model.wv[str(node)]
+
     nx.set_node_attributes(G_train, embeddings, attr_name)
 
     end_skip = time.time()
@@ -1680,7 +1713,7 @@ def _append_crosswalk_features(G_train, p, q, attr_name, dimensions=64):
     embeddings = nx.get_node_attributes(G_weighted, attr_name)
     nx.set_node_attributes(G_train, embeddings, attr_name)
 
-def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", NullModel_method = "ManualIter", temperature=0.5):
+def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", NullModel_method = "ManualIter", temperature=0.5, emb_dim=64):
     print(f"Calcul de SiNE custom (NullModel type ={NullModel_method})...")
     start_skip = time.time()
 
@@ -1708,12 +1741,27 @@ def _append_SiNEcustom(G_train, pos_attr="GT_pos", attr_name = "SiNEcustom", Nul
         print(f"--- ANALYSE DE L'ASYMÉTRIE du modèle spatial Bined pour SiNEcustom ---")
         print(f"Somme de la valeur absolue des différences (|B_avant - B_après|) : {asymmetry_sum:.2e}")
         print(f"Écart maximal ponctuel : {max_diff:.2e}")
-
+    elif NullModel_method == "ConfigModel":
+        nodes = list(G_train.nodes())
+        A = nx.to_numpy_array(G_train, nodelist=nodes, weight=None)
+        degrees = np.sum(A, axis=1)
+        m2 = np.sum(degrees)
+        # Modèle nul de configuration global (K)
+        K = np.outer(degrees, degrees) / m2
+        np.fill_diagonal(K, 0)
+        R_matrix = A - K
+    elif NullModel_method == "DC_sbm":
+        nodes = list(G_train.nodes())
+        partition_dict = {i: G_train.nodes[node][pos_attr] for i, node in enumerate(nodes)}
+        A = nx.to_numpy_array(G_train, nodelist=nodes, weight=None)
+        degrees = np.sum(A, axis=1)
+        M = compute_dc_sbm_matrix(A, degrees, partition_dict)
+        R_matrix = A - M
     elif NullModel_method == "None":
         nodes = list(G_train.nodes())
         R_matrix = A
 
-    embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=64, epochs=100, lr=0.1, temperature=temperature)
+    embedding_matrix = train_custom_signed_embedding(R_matrix=R_matrix, embedding_dim=emb_dim, epochs=100, lr=0.1, temperature=temperature)
     
     embeddings_dict = {}
     for i, node_id in enumerate(nodes):
@@ -1775,15 +1823,18 @@ def _append_SiNE(G_train, pos_attr="GT_pos", attr_name = "SiNE", NullModel_metho
     
     return G_train
 
-def _append_orthoModularity(G_train, attr_name ="orthoModulo_posEig" , emb_method = "PosEigenvals"):
+def _append_orthoModularity(G_train, attr_name ="orthoModulo_posEig" , emb_method = "PosEigenvals", DC=True, nb_iters=3):
     print(f"Calcul de orthoModularity (emb_method type ={emb_method})...")
     start_time = time.time()
-    commus_partitions, embeddings = run_decoupled_framework(G_train, max_global_iters=100, emb_method=emb_method)
+    commus_partitions, embeddings, commus_partitions_one, embeddings_one = run_decoupled_framework(G_train, max_global_iters=3, emb_method=emb_method)
 
     embeddings_dict = {node: embeddings[i] for i, node in enumerate(G_train.nodes())}
 
     nx.set_node_attributes(G_train, embeddings_dict, f"{attr_name}_emb")
     nx.set_node_attributes(G_train, commus_partitions, f"{attr_name}_comu")
+
+    nx.set_node_attributes(G_train, embeddings_one, f"{attr_name}_1_emb")
+    nx.set_node_attributes(G_train, commus_partitions_one, f"{attr_name}_1_comu")
     
     _normalize_community_assignment(G_train, f"{attr_name}_comu")
 
@@ -1792,6 +1843,38 @@ def _append_orthoModularity(G_train, attr_name ="orthoModulo_posEig" , emb_metho
 
     return G_train
 
+def _append_orthoModularity_baseline(G_train, attr_name ="orthoModulo_baseline" , emb_method = "PosEigenvals", DC=True):
+    nodes = list(G_train.nodes())
+    n = len(nodes)
+    mapping = {node: i for i, node in enumerate(nodes)}
+    A = nx.to_numpy_array(G_train, nodelist=nodes)
+    degrees = np.sum(A, axis=1)
+    m2 = np.sum(degrees)
+        
+    # Modèle nul de configuration de base (K)
+    K = np.outer(degrees, degrees) / m2
+    np.fill_diagonal(K, 0)
+    #R_embedding = A - K
+    R_embedding = A
+
+    def iterative_null_model(u, v):
+        return K[mapping[u], mapping[v]]
+            
+    new_partition = best_partition(G_train, resolution=1.0, null_model=iterative_null_model)
+    final_partition_nx = {nodes[mapping[node]]: com for node, com in new_partition.items()}
+
+    if emb_method =="PosEigenvals":
+        X_embedding = compute_embedding_positive_only(R_embedding, 8)
+    elif emb_method == "AllEigenvals" : 
+        X_embedding = compute_embedding_absolute_magnitude(R_embedding, 8)
+
+    embeddings_dict = {node: X_embedding[i] for i, node in enumerate(G_train.nodes())}
+
+    nx.set_node_attributes(G_train, embeddings_dict, f"{attr_name}_emb")
+    nx.set_node_attributes(G_train, final_partition_nx, f"{attr_name}_comu")
+
+    return G_train
+    
 
     
 EMBEDDING_MAPPING = {
@@ -1804,8 +1887,10 @@ EMBEDDING_MAPPING = {
     'SiNE': lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE", NullModel_method="None", temperature=0.5),
     'SiNE_spatial' : lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE_spatial", NullModel_method="ManualIter", temperature=0.5),
     'SiNE_spatial_bined' : lambda G, pos_attr="GT_pos": _append_SiNE(G, pos_attr, attr_name="SiNE_spatial_bined", NullModel_method="ManualIter_Bined", temperature=0.5),
-    'orthoModulo_posEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_posEig", emb_method="PosEigenvals"),
-    'orthoModulo_allEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_allEig", emb_method="AllEigenvals"),
+    'orthoModulo_posEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_posEig", emb_method="PosEigenvals", DC=True, nb_iters=3),
+    'orthoModulo_posEig_nonDC' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_posEig_nonDC", emb_method="PosEigenvals", DC=False, nb_iters=3),
+    'orthoModulo_allEig' : lambda G: _append_orthoModularity(G, attr_name="orthoModulo_allEig", emb_method="AllEigenvals", DC=True, nb_iters=3),
+    "orthoModulo_baseline" : lambda G :_append_orthoModularity_baseline(G, attr_name="orthoModulo_baseline", emb_method="PosEigenvals"),
 }
 
 def apply_fixed_log_binning(df, col_name, num_bins=10):
